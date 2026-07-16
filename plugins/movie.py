@@ -3,6 +3,8 @@ from pyrogram.types import CallbackQuery
 
 from keyboards.genre import genre_keyboard
 from keyboards.language import language_keyboard
+from keyboards.rating import rating_keyboard
+
 from database.user_state import set_state
 
 
@@ -10,27 +12,40 @@ from database.user_state import set_state
 async def movie_callback(client: Client, callback: CallbackQuery):
 
     data = callback.data
+    user_id = callback.from_user.id
 
-    # Movie button
+    # Movie Button
     if data == "movies":
 
-        set_state(callback.from_user.id, "type", "movie")
+        set_state(user_id, "type", "movie")
 
         await callback.message.edit_text(
             "🎬 **Select Movie Genre**",
             reply_markup=genre_keyboard("movie")
         )
 
-    # Movie Genre
+    # Genre Selected
     elif data.startswith("movie_"):
 
         genre = data.replace("movie_", "")
 
-        set_state(callback.from_user.id, "genre", genre)
+        set_state(user_id, "genre", genre)
 
         await callback.message.edit_text(
             "🌍 **Select Language**",
             reply_markup=language_keyboard()
+        )
+
+    # Language Selected
+    elif data.startswith("language_"):
+
+        language = data.replace("language_", "")
+
+        set_state(user_id, "language", language)
+
+        await callback.message.edit_text(
+            "⭐ **Select Minimum IMDb Rating**",
+            reply_markup=rating_keyboard()
         )
 
     await callback.answer()
