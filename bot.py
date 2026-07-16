@@ -5,6 +5,8 @@ from config import API_ID, API_HASH, BOT_TOKEN
 # Import Plugins
 import plugins.start
 import plugins.callback
+import plugins.movie
+import plugins.series
 
 app = Client(
     "CMGMovieRecommendationBot",
