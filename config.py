@@ -9,8 +9,8 @@ API_HASH = os.getenv("API_HASH")
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
 # TMDb API
-TMDB_API_KEY = os.getenv("TMDB_API_KEY")
+TMDB_API_KEY = os.getenv("6139cdeb3a5b302d69c5e07c6af3a9cd")
 
 # MongoDB
-MONGO_URI = os.getenv("MONGO_URI")
+MONGO_URI = os.getenv("mongodb+srv://movierecbot:cmg@123@cluster0.jprhzud.mongodb.net/?appName=Cluster0")
 DATABASE_NAME = os.getenv("DATABASE_NAME", "CMGMovieRecommendationBot")
