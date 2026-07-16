@@ -2,6 +2,7 @@ from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 
 def result_keyboard(page=1):
+
     return InlineKeyboardMarkup(
         [
             [
