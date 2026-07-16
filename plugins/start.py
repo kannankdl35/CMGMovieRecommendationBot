@@ -29,8 +29,16 @@ async def start_command(client, message):
         ]
     )
 
-    await message.reply_text(
-        text=text,
-        reply_markup=buttons,
-        disable_web_page_preview=True
-    )
+    try:
+        await message.reply_text(
+            text=text,
+            reply_markup=buttons,
+            disable_web_page_preview=True
+        )
+
+        print("✅ Reply sent successfully")
+
+    except Exception as e:
+        print("❌ ERROR SENDING REPLY")
+        print(f"Type: {type(e).__name__}")
+        print(f"Message: {e}")
