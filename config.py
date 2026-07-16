@@ -3,14 +3,11 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Telegram
-API_ID = int(os.getenv("API_ID", 22506863))
-API_HASH = os.getenv("77275414baa7c8a24fb8fd26d7db5adc")
-BOT_TOKEN = os.getenv("8768985105:AAFC5Ohd-YJcL0mOhCVeAeaqS70U_AHzgZM")
+API_ID = int(os.getenv("API_ID"))
+API_HASH = os.getenv("API_HASH")
+BOT_TOKEN = os.getenv("BOT_TOKEN")
 
-# TMDb API
-TMDB_API_KEY = os.getenv("6139cdeb3a5b302d69c5e07c6af3a9cd")
+TMDB_API_KEY = os.getenv("TMDB_API_KEY")
 
-# MongoDB
-MONGO_URI = os.getenv("mongodb+srv://movierecbot:cmg@123@cluster0.jprhzud.mongodb.net/?appName=Cluster0")
+MONGO_URI = os.getenv("MONGO_URI")
 DATABASE_NAME = os.getenv("DATABASE_NAME", "CMGMovieRecommendationBot")
