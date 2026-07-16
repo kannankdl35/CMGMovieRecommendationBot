@@ -1,31 +1,33 @@
-IMAGE_BASE_URL = "https://image.tmdb.org/t/p/w500"
-
-
 def format_movies(results):
+    """
+    Format the top 10 movie recommendations.
+    """
 
     if not results:
-        return "❌ No movies found."
+        return "❌ No movies found matching your selection."
 
-    text = "🎬 **Top 10 Recommended Movies**\n\n"
+    text = (
+        "🎬 **Top 10 Recommended Movies**\n"
+        "━━━━━━━━━━━━━━━━━━\n\n"
+    )
 
-    for i, movie in enumerate(results[:10], start=1):
+    for index, movie in enumerate(results[:10], start=1):
 
         title = movie.get("title", "Unknown")
 
-        year = movie.get("release_date", "")
-        year = year[:4] if year else "----"
+        release_date = movie.get("release_date", "")
+        year = release_date[:4] if release_date else "----"
 
-        rating = movie.get("vote_average", 0)
-
-        overview = movie.get("overview", "")
-
-        if len(overview) > 120:
-            overview = overview[:120] + "..."
+        rating = movie.get("vote_average", "N/A")
 
         text += (
-            f"**{i}. {title} ({year})**\n"
-            f"⭐ {rating}\n"
-            f"📝 {overview}\n\n"
+            f"**{index}. {title} ({year})**\n"
+            f"⭐ Rating: **{rating}**\n\n"
         )
+
+    text += (
+        "━━━━━━━━━━━━━━━━━━\n"
+        "Choose **More Results** to load another 10 movies."
+    )
 
     return text
