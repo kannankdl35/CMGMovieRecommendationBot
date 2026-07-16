@@ -55,24 +55,21 @@ async def movie_callback(client: Client, callback: CallbackQuery):
     # Rating
     elif data.startswith("rating_"):
 
-        rating = float(data.replace("rating_", ""))
+    rating = float(data.replace("rating_", ""))
 
-        set_state(user_id, "rating", rating)
+    set_state(user_id, "rating", rating)
 
-        state = get_state(user_id)
+    state = get_state(user_id)
 
-        results = get_movie_recommendations(
-            genre=state["genre"],
-            language=state["language"],
-            rating=state["rating"]
-        )
+    results = get_movie_recommendations(
+        genre=state["genre"],
+        language=state["language"],
+        rating=state["rating"]
+    )
 
-        text = format_movies(results)
+    text = format_movies(results)
 
-        await callback.message.edit_text(
-            text,
-            reply_markup=result_keyboard(),
-            disable_web_page_preview=True
-        )
-
-    await callback.answer()
+    await callback.message.edit_text(
+        text=text,
+        reply_markup=result_keyboard()
+    )
