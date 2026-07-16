@@ -6,7 +6,7 @@ load_dotenv()
 # Telegram
 API_ID = int(os.getenv("API_ID", 22506863))
 API_HASH = os.getenv("77275414baa7c8a24fb8fd26d7db5adc")
-BOT_TOKEN = os.getenv("BOT_TOKEN")
+BOT_TOKEN = os.getenv("8768985105:AAFC5Ohd-YJcL0mOhCVeAeaqS70U_AHzgZM")
 
 # TMDb API
 TMDB_API_KEY = os.getenv("6139cdeb3a5b302d69c5e07c6af3a9cd")
