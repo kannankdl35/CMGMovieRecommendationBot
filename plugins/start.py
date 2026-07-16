@@ -1,15 +1,32 @@
-from pyrogram import Client
+from pyrogram import Client, filters
+from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
-from config import API_ID, API_HASH, BOT_TOKEN
 
-app = Client(
-    "CMGMovieRecommendationBot",
-    api_id=API_ID,
-    api_hash=API_HASH,
-    bot_token=BOT_TOKEN,
-    plugins=dict(root="plugins")
-)
+@Client.on_message(filters.command("start"))
+async def start_command(client, message):
 
-print("✅ CMG Movie Recommendation Bot Started...")
+    text = (
+        "👋 **Welcome to CMG Movie Recommendation Bot**\n\n"
+        "🎬 Discover Movies & TV Series based on:\n\n"
+        "• 🎭 Genre\n"
+        "• 🌍 Language\n"
+        "• ⭐ Rating\n\n"
+        "Click the button below to start discovering your next favorite movie."
+    )
 
-app.run()
+    buttons = InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton(
+                    "🎥 Suggest Me",
+                    callback_data="suggest_me"
+                )
+            ]
+        ]
+    )
+
+    await message.reply_text(
+        text=text,
+        reply_markup=buttons,
+        disable_web_page_preview=True
+    )
