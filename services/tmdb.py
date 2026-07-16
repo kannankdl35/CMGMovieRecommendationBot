@@ -6,36 +6,27 @@ BASE_URL = "https://api.themoviedb.org/3"
 
 
 def discover_movies(
-    genre=None,
-    language=None,
-    rating=None,
-    page=1
+    genre_id: int,
+    language: str,
+    rating: float,
+    page: int = 1
 ):
-    """
-    Discover movies using TMDb filters.
-    """
-
     url = f"{BASE_URL}/discover/movie"
 
     params = {
         "api_key": TMDB_API_KEY,
-        "sort_by": "vote_average.desc",
-        "vote_count.gte": 500,
-        "page": page
+        "language": "en-US",
+        "sort_by": "popularity.desc",
+        "include_adult": False,
+        "include_video": False,
+        "page": page,
+        "with_original_language": language,
+        "with_genres": genre_id,
+        "vote_average.gte": rating,
+        "vote_count.gte": 100
     }
 
-    if genre:
-        params["with_genres"] = genre
+    response = requests.get(url, params=params, timeout=15)
+    response.raise_for_status()
 
-    if language:
-        params["with_original_language"] = language
-
-    if rating:
-        params["vote_average.gte"] = rating
-
-    response = requests.get(url, params=params)
-
-    if response.status_code == 200:
-        return response.json()
-
-    return None
+    return response.json()
