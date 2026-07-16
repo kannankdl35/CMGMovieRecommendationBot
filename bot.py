@@ -7,6 +7,7 @@ import plugins.start
 import plugins.callback
 import plugins.movie
 import plugins.series
+import plugins.details
 
 app = Client(
     "CMGMovieRecommendationBot",
