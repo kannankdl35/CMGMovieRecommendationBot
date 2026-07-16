@@ -1,13 +1,18 @@
 from pyrogram import Client
+
 from config import API_ID, API_HASH, BOT_TOKEN
+
+# Import Plugins
+import plugins.start
+import plugins.callback
 
 app = Client(
     "CMGMovieRecommendationBot",
     api_id=API_ID,
     api_hash=API_HASH,
-    bot_token=BOT_TOKEN
+    bot_token=BOT_TOKEN,
 )
 
-if __name__ == "__main__":
-    print("Bot is starting...")
-    app.run()
+print("✅ CMG Movie Recommendation Bot Started...")
+
+app.run()
