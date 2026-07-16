@@ -2,16 +2,35 @@ from pyrogram import Client
 from pyrogram.types import CallbackQuery
 
 from keyboards.genre import genre_keyboard
+from keyboards.language import language_keyboard
+from database.user_state import set_state
 
 
 @Client.on_callback_query()
-async def movie_callback(client, callback: CallbackQuery):
+async def movie_callback(client: Client, callback: CallbackQuery):
 
-    if callback.data == "movies":
+    data = callback.data
+
+    # Movie button
+    if data == "movies":
+
+        set_state(callback.from_user.id, "type", "movie")
 
         await callback.message.edit_text(
-            text="🎬 **Select Movie Genre**",
+            "🎬 **Select Movie Genre**",
             reply_markup=genre_keyboard("movie")
         )
 
-        await callback.answer()
+    # Movie Genre
+    elif data.startswith("movie_"):
+
+        genre = data.replace("movie_", "")
+
+        set_state(callback.from_user.id, "genre", genre)
+
+        await callback.message.edit_text(
+            "🌍 **Select Language**",
+            reply_markup=language_keyboard()
+        )
+
+    await callback.answer()
