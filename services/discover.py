@@ -1,18 +1,25 @@
+from database.genres import MOVIE_GENRES
 from services.tmdb import discover_movies
 
 
-def get_movie_recommendations(genre, language, rating):
+def get_movie_recommendations(genre, language, rating, page=1):
     """
-    Returns the top 10 recommended movies.
+    Returns the top movie recommendations.
     """
 
-    data = discover_movies(
-        genre=genre,
-        language=language,
-        rating=rating
-    )
+    genre_id = MOVIE_GENRES.get(genre)
 
-    if not data:
+    if not genre_id:
         return []
 
-    return data.get("results", [])[:10]
+    response = discover_movies(
+        genre_id=genre_id,
+        language=language,
+        rating=rating,
+        page=page
+    )
+
+    if not response:
+        return []
+
+    return response.get("results", [])
