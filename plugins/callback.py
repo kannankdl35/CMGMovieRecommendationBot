@@ -174,21 +174,25 @@ async def callback_handler(client: Client, callback: CallbackQuery):
 
     # ---------------- MOVIE DETAILS ----------------
 
+# ✅ Handles both movies and series
     if data.startswith("movie_"):
+        item_id = data.replace("movie_", "")
+        if item_id.isdigit():
+            # ✅ Check user state to determine if series or movie
+            state = get_state(user_id)
+            is_series = state.get("type") == "series"
 
-        movie_id = data.replace("movie_", "")
-
-        if movie_id.isdigit():
-
-            poster, caption = get_movie_info(int(movie_id))
+            if is_series:
+                poster, caption = get_series_info(int(item_id))  # ✅ Series
+                error_msg = "Series not found."
+            else:
+                poster, caption = get_movie_info(int(item_id))  # Movie
+                error_msg = "Movie not found."
 
             if caption is None:
-
-                await callback.answer(
-                    "Movie not found.",
-                    show_alert=True
-                )
+                await callback.answer(error_msg, show_alert=True)
                 return
+            # ... send photo/message
 
             if poster:
 
