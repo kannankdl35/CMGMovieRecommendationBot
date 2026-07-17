@@ -24,6 +24,7 @@ from plugins.series import (
 
 from plugins.details import (
     get_movie_info,
+    get_series_info,  # ✅ NEW
 )
 
 
