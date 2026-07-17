@@ -3,6 +3,7 @@ from pyrogram.types import CallbackQuery
 
 from keyboards.type import type_keyboard
 from keyboards.home import home_keyboard
+from keyboards.genre import genre_keyboard
 
 
 @Client.on_callback_query()
@@ -10,7 +11,6 @@ async def callback_handler(client: Client, callback: CallbackQuery):
 
     data = callback.data
 
-    # Home -> Suggest Me
     if data == "suggest_me":
 
         await callback.message.edit_text(
@@ -18,10 +18,20 @@ async def callback_handler(client: Client, callback: CallbackQuery):
             reply_markup=type_keyboard()
         )
 
-        await callback.answer()
-        return
+    elif data == "movies":
 
-    # Back to Home
+        await callback.message.edit_text(
+            text="🎬 **Select a Movie Genre**",
+            reply_markup=genre_keyboard("movie")
+        )
+
+    elif data == "series":
+
+        await callback.message.edit_text(
+            text="📺 **Select a Series Genre**",
+            reply_markup=genre_keyboard("series")
+        )
+
     elif data == "back_home":
 
         await callback.message.edit_text(
@@ -36,9 +46,4 @@ async def callback_handler(client: Client, callback: CallbackQuery):
             reply_markup=home_keyboard()
         )
 
-        await callback.answer()
-        return
-
-    # Ignore all other callbacks.
-    # They will be handled by movie.py.
     await callback.answer()
