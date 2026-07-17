@@ -145,12 +145,13 @@ async def callback_handler(client: Client, callback: CallbackQuery):
     # ---------------- RATING ----------------
 
     if data.startswith("rating_"):
-
-        rating = float(data.replace("rating_", ""))
+        rating_value = data.replace("rating_", "")
+        # ✅ Convert to float and add small offset to make "6+" mean "> 6" instead of ">= 6"
+        rating = float(rating_value)
+        # Add 0.01 to ensure we get strictly greater than, not equal to
+        rating = rating + 0.01 if rating > 0 else rating
 
         set_state(user_id, "rating", rating)
-
-        state = get_state(user_id)
 
         if state.get("type") == "movie":
             text, results = movie_recommendations(user_id)
