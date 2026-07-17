@@ -3,11 +3,18 @@ from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 def result_keyboard(results, page=1):
 
+    PER_PAGE = 10
+
+    start = (page - 1) * PER_PAGE
+    end = start + PER_PAGE
+
+    page_results = results[start:end]
+
     buttons = []
 
     row = []
 
-    for index, movie in enumerate(results[:10], start=1):
+    for index, movie in enumerate(page_results, start=start + 1):
 
         row.append(
             InlineKeyboardButton(
@@ -23,14 +30,26 @@ def result_keyboard(results, page=1):
     if row:
         buttons.append(row)
 
-    buttons.append(
-        [
+    navigation = []
+
+    if page > 1:
+        navigation.append(
             InlineKeyboardButton(
-                "🔄 More Results",
+                "⬅ Previous",
+                callback_data=f"page_{page - 1}"
+            )
+        )
+
+    if end < len(results):
+        navigation.append(
+            InlineKeyboardButton(
+                "➡ Next",
                 callback_data=f"page_{page + 1}"
             )
-        ]
-    )
+        )
+
+    if navigation:
+        buttons.append(navigation)
 
     buttons.append(
         [
