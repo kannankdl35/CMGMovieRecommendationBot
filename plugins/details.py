@@ -11,10 +11,19 @@ async def details_callback(client: Client, callback: CallbackQuery):
 
     data = callback.data
 
+    # Only handle movie detail callbacks
     if not data.startswith("movie_"):
         return
 
     movie_id = data.replace("movie_", "")
+
+    # Ignore genre callbacks like:
+    # movie_action
+    # movie_comedy
+    # movie_drama
+    if not movie_id.isdigit():
+        await callback.answer()
+        return
 
     movie = movie_details(movie_id)
 
@@ -28,11 +37,8 @@ async def details_callback(client: Client, callback: CallbackQuery):
         poster = IMAGE_URL + poster
 
     title = movie.get("title", "Unknown")
-
     rating = movie.get("vote_average", "N/A")
-
-    release = movie.get("release_date", "")
-
+    release = movie.get("release_date", "-")
     overview = movie.get("overview", "No overview available.")
 
     genres = ", ".join(
@@ -48,15 +54,12 @@ async def details_callback(client: Client, callback: CallbackQuery):
     )
 
     if poster:
-
         await client.send_photo(
             chat_id=callback.message.chat.id,
             photo=poster,
             caption=caption
         )
-
     else:
-
         await callback.message.reply_text(caption)
 
     await callback.answer()
