@@ -1,38 +1,48 @@
 from pyrogram import Client
 from pyrogram.types import CallbackQuery
 
-from keyboards.type import type_keyboard
 from keyboards.home import home_keyboard
+from keyboards.type import type_keyboard
 from keyboards.genre import genre_keyboard
+from keyboards.language import language_keyboard
+from keyboards.rating import rating_keyboard
+from keyboards.result import result_keyboard
+
+from database.user_state import (
+    set_state,
+    get_state,
+)
+
+from plugins.movie import (
+    recommendations as movie_recommendations,
+)
+
+from plugins.series import (
+    recommendations as series_recommendations,
+)
+
+from plugins.details import get_movie_info
 
 
 @Client.on_callback_query()
 async def callback_handler(client: Client, callback: CallbackQuery):
 
     data = callback.data
+    user_id = callback.from_user.id
+
+    # ---------------- HOME ----------------
 
     if data == "suggest_me":
 
         await callback.message.edit_text(
-            text="🎬 **Select what you're looking for**",
+            "🎬 **Select what you're looking for**",
             reply_markup=type_keyboard()
         )
 
-    elif data == "movies":
+        await callback.answer()
+        return
 
-        await callback.message.edit_text(
-            text="🎬 **Select a Movie Genre**",
-            reply_markup=genre_keyboard("movie")
-        )
-
-    elif data == "series":
-
-        await callback.message.edit_text(
-            text="📺 **Select a Series Genre**",
-            reply_markup=genre_keyboard("series")
-        )
-
-    elif data == "back_home":
+    if data == "back_home":
 
         await callback.message.edit_text(
             text=(
@@ -45,5 +55,167 @@ async def callback_handler(client: Client, callback: CallbackQuery):
             ),
             reply_markup=home_keyboard()
         )
+
+        await callback.answer()
+        return
+
+    # ---------------- MOVIE ----------------
+
+    if data == "movies":
+
+        set_state(user_id, "type", "movie")
+
+        await callback.message.edit_text(
+            "🎬 **Select Movie Genre**",
+            reply_markup=genre_keyboard("movie")
+        )
+
+        await callback.answer()
+        return
+
+    # ---------------- SERIES ----------------
+
+    if data == "series":
+
+        set_state(user_id, "type", "series")
+
+        await callback.message.edit_text(
+            "📺 **Select Series Genre**",
+            reply_markup=genre_keyboard("series")
+        )
+
+        await callback.answer()
+        return
+
+    # ---------------- GENRE ----------------
+
+    if data.startswith("movie_"):
+
+        genre = data.replace("movie_", "")
+
+        if not genre.isdigit():
+
+            set_state(user_id, "genre", genre)
+
+            await callback.message.edit_text(
+                "🌍 **Select Language**",
+                reply_markup=language_keyboard()
+            )
+
+            await callback.answer()
+            return
+
+    if data.startswith("series_"):
+
+        genre = data.replace("series_", "")
+
+        set_state(user_id, "genre", genre)
+
+        await callback.message.edit_text(
+            "🌍 **Select Language**",
+            reply_markup=language_keyboard()
+        )
+
+        await callback.answer()
+        return
+
+    # ---------------- LANGUAGE ----------------
+
+    if data.startswith("language_"):
+
+        language = data.replace("language_", "")
+
+        set_state(user_id, "language", language)
+
+        await callback.message.edit_text(
+            "⭐ **Select Minimum IMDb Rating**",
+            reply_markup=rating_keyboard()
+        )
+
+        await callback.answer()
+        return
+
+    # ---------------- RATING ----------------
+
+    if data.startswith("rating_"):
+
+        rating = float(data.replace("rating_", ""))
+
+        set_state(user_id, "rating", rating)
+
+        state = get_state(user_id)
+
+        if state.get("type") == "movie":
+            text, results = movie_recommendations(user_id)
+        else:
+            text, results = series_recommendations(user_id)
+
+        await callback.message.edit_text(
+            text=text,
+            reply_markup=result_keyboard(results)
+        )
+
+        await callback.answer()
+        return
+
+    # ---------------- MOVIE DETAILS ----------------
+
+    if data.startswith("movie_"):
+
+        movie_id = data.replace("movie_", "")
+
+        if movie_id.isdigit():
+
+            poster, caption = get_movie_info(movie_id)
+
+            if caption is None:
+                await callback.answer(
+                    "Movie not found.",
+                    show_alert=True
+                )
+                return
+
+            if poster:
+
+                await client.send_photo(
+                    chat_id=callback.message.chat.id,
+                    photo=poster,
+                    caption=caption
+                )
+
+            else:
+
+                await callback.message.reply_text(caption)
+
+            await callback.answer()
+            return
+
+    # ---------------- MORE RESULTS ----------------
+
+    if data.startswith("page_"):
+
+        await callback.answer(
+            "Pagination will be added in the next update.",
+            show_alert=True
+        )
+        return
+
+    # ---------------- BACK ----------------
+
+    if data == "back_language":
+
+        state = get_state(user_id)
+
+        movie_type = state.get("type", "movie")
+
+        await callback.message.edit_text(
+            "🌍 **Select Language**",
+            reply_markup=language_keyboard()
+        )
+
+        await callback.answer()
+        return
+
+    # ---------------- UNKNOWN ----------------
 
     await callback.answer()
