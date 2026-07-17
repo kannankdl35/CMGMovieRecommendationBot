@@ -1,3 +1,4 @@
+
 from pyrogram import Client
 from pyrogram.types import CallbackQuery
 
@@ -8,19 +9,10 @@ from keyboards.language import language_keyboard
 from keyboards.rating import rating_keyboard
 from keyboards.result import result_keyboard
 
-from database.user_state import (
-    set_state,
-    get_state,
-)
+from database.user_state import set_state, get_state
 
-from plugins.movie import (
-    recommendations as movie_recommendations,
-)
-
-from plugins.series import (
-    recommendations as series_recommendations,
-)
-
+from plugins.movie import recommendations as movie_recommendations
+from plugins.series import recommendations as series_recommendations
 from plugins.details import get_movie_info
 
 
@@ -59,7 +51,7 @@ async def callback_handler(client: Client, callback: CallbackQuery):
         await callback.answer()
         return
 
-    # ---------------- MOVIE ----------------
+    # ---------------- MOVIES ----------------
 
     if data == "movies":
 
@@ -91,11 +83,12 @@ async def callback_handler(client: Client, callback: CallbackQuery):
 
     if data.startswith("movie_"):
 
-        genre = data.replace("movie_", "")
+        value = data.replace("movie_", "")
 
-        if not genre.isdigit():
+        # Ignore movie IDs here
+        if not value.isdigit():
 
-            set_state(user_id, "genre", genre)
+            set_state(user_id, "genre", value)
 
             await callback.message.edit_text(
                 "🌍 **Select Language**",
@@ -107,9 +100,9 @@ async def callback_handler(client: Client, callback: CallbackQuery):
 
     if data.startswith("series_"):
 
-        genre = data.replace("series_", "")
+        value = data.replace("series_", "")
 
-        set_state(user_id, "genre", genre)
+        set_state(user_id, "genre", value)
 
         await callback.message.edit_text(
             "🌍 **Select Language**",
@@ -164,11 +157,13 @@ async def callback_handler(client: Client, callback: CallbackQuery):
 
         movie_id = data.replace("movie_", "")
 
+        # Only process numeric movie IDs
         if movie_id.isdigit():
 
-            poster, caption = get_movie_info(movie_id)
+            poster, caption = get_movie_info(int(movie_id))
 
             if caption is None:
+
                 await callback.answer(
                     "Movie not found.",
                     show_alert=True
@@ -190,23 +185,19 @@ async def callback_handler(client: Client, callback: CallbackQuery):
             await callback.answer()
             return
 
-    # ---------------- MORE RESULTS ----------------
+    # ---------------- PAGINATION ----------------
 
     if data.startswith("page_"):
 
         await callback.answer(
-            "Pagination will be added in the next update.",
+            "More Results feature is coming soon.",
             show_alert=True
         )
         return
 
-    # ---------------- BACK ----------------
+    # ---------------- BACK TO LANGUAGE ----------------
 
     if data == "back_language":
-
-        state = get_state(user_id)
-
-        movie_type = state.get("type", "movie")
 
         await callback.message.edit_text(
             "🌍 **Select Language**",
@@ -215,7 +206,3 @@ async def callback_handler(client: Client, callback: CallbackQuery):
 
         await callback.answer()
         return
-
-    # ---------------- UNKNOWN ----------------
-
-    await callback.answer()
