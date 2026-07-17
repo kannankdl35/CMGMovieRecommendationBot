@@ -1,21 +1,13 @@
-from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-
-
 def result_keyboard(results, page=1):
 
+    # Show only first 10 movies, no pagination
     PER_PAGE = 10
-
-    start = (page - 1) * PER_PAGE
-    end = start + PER_PAGE
-
-    page_results = results[start:end]
+    page_results = results[:PER_PAGE]  # ✅ Take only first 10
 
     buttons = []
-
     row = []
 
-    for index, movie in enumerate(page_results, start=start + 1):
-
+    for index, movie in enumerate(page_results, start=1):  # Start from 1
         row.append(
             InlineKeyboardButton(
                 str(index),
@@ -30,34 +22,8 @@ def result_keyboard(results, page=1):
     if row:
         buttons.append(row)
 
-    navigation = []
-
-    if page > 1:
-        navigation.append(
-            InlineKeyboardButton(
-                "⬅ Previous",
-                callback_data=f"page_{page - 1}"
-            )
-        )
-
-    if end < len(results):
-        navigation.append(
-            InlineKeyboardButton(
-                "➡ Next",
-                callback_data=f"page_{page + 1}"
-            )
-        )
-
-    if navigation:
-        buttons.append(navigation)
-
-    buttons.append(
-        [
-            InlineKeyboardButton(
-                "🏠 Home",
-                callback_data="back_home"
-            )
-        ]
-    )
+    # ✅ REMOVED: No pagination buttons anymore
+    # Add Home button only (no pagination buttons)
+    buttons.append([InlineKeyboardButton("🏠 Home", callback_data="back_home")])
 
     return InlineKeyboardMarkup(buttons)
