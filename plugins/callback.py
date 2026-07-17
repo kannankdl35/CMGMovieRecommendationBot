@@ -205,29 +205,9 @@ async def callback_handler(client: Client, callback: CallbackQuery):
 
     # ---------------- PAGINATION ----------------
 
-    if data.startswith("page_"):
-
-        from database.user_state import get_results
-
-        page = int(data.replace("page_", ""))
-
-        results = get_results(user_id)
-
-        if not results:
-
-            await callback.answer(
-                "Session expired. Please search again.",
-                show_alert=True
-            )
-            return
-
-        await callback.message.edit_reply_markup(
-            reply_markup=result_keyboard(results, page)
-        )
-
-        await callback.answer()
-        return
-
+    # ✅ REMOVED: Entire pagination handler deleted
+# (No need for page handling since we only show 10 items)
+    
     # ---------------- BACK ----------------
 
     if data == "back_language":
