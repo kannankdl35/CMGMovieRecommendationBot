@@ -13,8 +13,11 @@ def format_movies(results):
 
     for index, movie in enumerate(results[:10], start=1):
 
-        title = movie.get("title", "Unknown")
-
+        title = (
+    movie.get("title")
+    or movie.get("name")
+    or "Unknown"
+        )
         release_date = movie.get("release_date", "")
         year = release_date[:4] if release_date else "----"
 
