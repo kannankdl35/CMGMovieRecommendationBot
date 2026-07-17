@@ -15,9 +15,11 @@ from utils.formatter import format_movies
 @Client.on_callback_query()
 async def movie_callback(client: Client, callback: CallbackQuery):
 
+    print("MOVIE CALLBACK:", callback.data)
+
     data = callback.data
     user_id = callback.from_user.id
-
+    
     # Movie Button
     if data == "movies":
 
