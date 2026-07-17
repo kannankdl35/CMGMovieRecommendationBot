@@ -154,6 +154,9 @@ async def callback_handler(client: Client, callback: CallbackQuery):
 
         set_state(user_id, "rating", rating)
 
+        # ✅ FIX: state was used below without being fetched first (NameError)
+        state = get_state(user_id)
+
         if state.get("type") == "movie":
             text, results = movie_recommendations(user_id)
         else:
@@ -229,5 +232,3 @@ async def callback_handler(client: Client, callback: CallbackQuery):
     # ---------------- UNKNOWN ----------------
 
     await callback.answer()
-
-
