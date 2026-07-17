@@ -64,14 +64,14 @@ async def movie_callback(client: Client, callback: CallbackQuery):
         results = get_movie_recommendations(
             genre=state.get("genre"),
             language=state.get("language"),
-            rating=state.get("rating")
+            rating=state.get("rating"),
         )
 
         text = format_movies(results)
 
         await callback.message.edit_text(
             text=text,
-            reply_markup=result_keyboard()
+            reply_markup=result_keyboard(results)
         )
 
     await callback.answer()
