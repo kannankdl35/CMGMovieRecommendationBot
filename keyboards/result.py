@@ -1,3 +1,6 @@
+from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+
+
 def result_keyboard(results, page=1):
 
     # Show only first 10 movies, no pagination
