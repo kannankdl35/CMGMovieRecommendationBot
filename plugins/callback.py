@@ -1,5 +1,5 @@
 from pyrogram import Client
-from pyrogram.types import CallbackQuery
+from pyrogram.types import CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 
 from keyboards.home import home_keyboard
 from keyboards.type import type_keyboard
@@ -14,6 +14,16 @@ from database.user_state import (
     clear_state,
 )
 
+# ✅ NEW: Watchlist database helpers (Feature 4 & 5)
+from database.watchlist_db import add_to_watchlist, get_watchlist
+
+# ✅ NEW: OMDb + YouTube services (Feature 1, 2 & 3)
+from services.omdb import get_details
+from services.youtube import get_trailer_url
+
+# ✅ NEW: Shared UI helper for rendering result/watchlist cards
+from utils.ui import send_result_cards
+
 from plugins.movie import (
     recommendations as movie_recommendations,
 )
@@ -25,6 +35,7 @@ from plugins.series import (
 from plugins.details import (
     get_movie_info,
     get_series_info,  # ✅ NEW
+    send_omdb_details,  # ✅ NEW: Feature 2 & 3 details renderer
 )
 
 
@@ -65,6 +76,131 @@ async def callback_handler(client: Client, callback: CallbackQuery):
         )
 
         await callback.answer()
+        return
+
+    # ---------------- FIND MOVIES (Feature 1) ----------------
+
+    if data == "find_movies":
+
+        # Mark this user as "waiting to type a search query"
+        set_state(user_id, "awaiting_search", True)
+
+        await callback.message.edit_text(
+            "🔍 **Find Movies & Series**\n\n"
+            "Type the name of a movie or TV series you want to search for.",
+            reply_markup=InlineKeyboardMarkup(
+                [[InlineKeyboardButton("🏠 Home", callback_data="back_home")]]
+            )
+        )
+
+        await callback.answer()
+        return
+
+    # ---------------- SEARCH RESULT SELECTED (Feature 1 -> Feature 2) ----------------
+
+    if data.startswith("sr_"):
+
+        imdb_id = data.replace("sr_", "", 1)
+
+        await send_omdb_details(client, callback.message.chat.id, imdb_id)
+
+        await callback.answer()
+        return
+
+    # ---------------- WATCHLIST: OPEN LIST (Feature 4) ----------------
+
+    if data == "wl_open":
+
+        items = await get_watchlist(user_id)
+
+        if not items:
+            await callback.answer("Your watchlist is empty.", show_alert=True)
+            return
+
+        # Convert stored DB docs into the shared card format used by send_result_cards
+        cards = [
+            {
+                "Title": doc.get("title"),
+                "Year": doc.get("year"),
+                "Poster": doc.get("poster"),
+                "imdbID": doc.get("imdb_id"),
+                "Type": doc.get("media_type", "movie"),
+            }
+            for doc in items
+        ]
+
+        await callback.answer()
+        await send_result_cards(client, callback.message.chat.id, cards, "wl_")
+        return
+
+    # ---------------- WATCHLIST: ITEM SELECTED (Feature 4 -> Feature 2) ----------------
+
+    if data.startswith("wl_"):
+
+        imdb_id = data.replace("wl_", "", 1)
+
+        await send_omdb_details(client, callback.message.chat.id, imdb_id)
+
+        await callback.answer()
+        return
+
+    # ---------------- TRAILER (Feature 3) ----------------
+
+    if data.startswith("trailer_"):
+
+        imdb_id = data.replace("trailer_", "", 1)
+
+        details = get_details(imdb_id)
+
+        if not details:
+            await callback.answer("Trailer not available.", show_alert=True)
+            return
+
+        trailer_url = get_trailer_url(details.get("Title"), details.get("Year"))
+
+        if not trailer_url:
+            await callback.answer("Trailer not available.", show_alert=True)
+            return
+
+        await callback.message.reply_text(
+            f"🎬 Trailer for **{details.get('Title')}**",
+            reply_markup=InlineKeyboardMarkup(
+                [[InlineKeyboardButton("▶️ Watch on YouTube", url=trailer_url)]]
+            )
+        )
+
+        await callback.answer()
+        return
+
+    # ---------------- ADD TO WATCHLIST (Feature 3 -> Feature 5) ----------------
+
+    if data.startswith("addwl_"):
+
+        imdb_id = data.replace("addwl_", "", 1)
+
+        details = get_details(imdb_id)
+
+        if not details:
+            await callback.answer("Could not add this title. Please try again.", show_alert=True)
+            return
+
+        poster = details.get("Poster")
+        poster = poster if poster and poster != "N/A" else None
+
+        added = await add_to_watchlist(
+            user_id=user_id,
+            imdb_id=imdb_id,
+            title=details.get("Title"),
+            poster=poster,
+            year=details.get("Year"),
+            media_type=details.get("Type", "movie"),
+        )
+
+        if added:
+            await callback.answer("Added to Watchlist ✅", show_alert=True)
+        else:
+            await callback.answer("Already in your Watchlist.", show_alert=True)
+
         return
 
     # ---------------- MOVIES ----------------
