@@ -7,6 +7,13 @@ from services.omdb import get_details, get_series_episode_count
 from utils.formatter import format_omdb_details
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
+# ✅ NEW (Feature 6): used to embed a real Trailer URL button directly on
+# details pages opened from an inline search result - those messages have
+# no chat/message object to reply into (only an inline_message_id), so the
+# lazy "tap Trailer to fetch it" callback used elsewhere doesn't work there;
+# the trailer link has to be fetched up front and attached as a URL button.
+from services.youtube import get_trailer_url
+
 # ✅ NEW: used to auto-detect whether a title is already saved, so the
 # correct watchlist button (Add vs Delete) is shown regardless of where
 # the details page was opened from (Feature 2 & 3 fix).
@@ -104,12 +111,12 @@ def get_series_info(series_id):
 # so all three show identical information and controls.
 # ---------------------------------------------------------------------------
 
-def build_details_keyboard(imdb_id, in_watchlist, context="search"):
+def build_details_keyboard(imdb_id, in_watchlist, context="search", trailer_url=None):
     """Build the Trailer / Watchlist (Add or Delete) / Done inline keyboard
     shown under a details page.
 
     `context` controls how the Watchlist button behaves once tapped, and
-    whether a Done button is shown at all:
+    which details page this keyboard belongs to:
 
     - "search" (default): used for "Find Movies & Series" results and
       "Suggest Me" results.
@@ -118,14 +125,28 @@ def build_details_keyboard(imdb_id, in_watchlist, context="search"):
           the item from the database, shows a popup confirmation, and
           swaps the button back to "Add to Watchlist" IN PLACE - the
           message itself is never deleted.
-        * A "✅ Done" button (callback_data "done") is shown so the user
-          can dismiss the details message when finished with it.
     - "watchlist": used for details opened from the user's own
-      /watchlist listing (unchanged behavior).
+      /watchlist listing.
         * Delete from Watchlist -> callback_data "delwl_<imdb_id>":
           removes the item, deletes this details message, and refreshes
           the watchlist listing.
-        * No Done button (not requested for this flow).
+    - "inline" (Feature 6, NEW): used for the full details page shown
+      automatically right after a title is picked from an inline "Find
+      Movies & Series" search (see plugins/inline.py's
+      inline_result_chosen()). These messages only have an
+      inline_message_id (no chat/message object), so:
+        * the Trailer button is a plain URL button built from
+          `trailer_url` (fetched up front by the caller) instead of a
+          lazy callback_data lookup - it's simply omitted if no trailer
+          was found.
+        * Add/Delete Watchlist still use "addwl_"/"rmwl_", handled with an
+          inline-safe branch in plugins/callback.py.
+
+    ✅ CHANGED (Feature 6): the "✅ Done" button (callback_data "done") is
+    now shown for every context, not just "search" - including details
+    pages opened from the Watchlist and from inline search results.
+    Tapping it only dismisses/clears that details message; it never
+    touches the saved watchlist entry itself.
 
     All of these callback_data values are handled in plugins/callback.py.
     """
@@ -143,13 +164,20 @@ def build_details_keyboard(imdb_id, in_watchlist, context="search"):
             "❤️ Add to Watchlist", callback_data=f"addwl_{imdb_id}"
         )
 
-    rows = [
-        [InlineKeyboardButton("🎬 Trailer", callback_data=f"trailer_{imdb_id}")],
-        [watchlist_button],
-    ]
+    rows = []
 
-    if context == "search":
-        rows.append([InlineKeyboardButton("✅ Done", callback_data="done")])
+    if context == "inline":
+        if trailer_url:
+            rows.append([InlineKeyboardButton("🎬 Trailer", url=trailer_url)])
+        # No trailer found for this title - simply omit the row rather
+        # than showing a button that can't do anything.
+    else:
+        rows.append(
+            [InlineKeyboardButton("🎬 Trailer", callback_data=f"trailer_{imdb_id}")]
+        )
+
+    rows.append([watchlist_button])
+    rows.append([InlineKeyboardButton("✅ Done", callback_data="done")])
 
     return InlineKeyboardMarkup(rows)
 
@@ -215,6 +243,77 @@ async def send_omdb_details(client, chat_id, imdb_id, user_id=None, in_watchlist
             text=caption,
             reply_markup=buttons
         )
+
+
+# ---------------------------------------------------------------------------
+# ✅ NEW (Feature 6): Full details page shown right after picking a title
+# from an inline "Find Movies & Series" search - no extra "View Details"
+# tap needed. Called from plugins/inline.py's inline_result_chosen()
+# (an @Client.on_chosen_inline_result() handler), which fires the moment
+# Telegram inserts the chosen result into the chat.
+#
+# Unlike send_omdb_details() above, there is no chat/message object to
+# send into here - Telegram only gives us the inline_message_id of the
+# card it just inserted, so the existing short card is *edited in place*
+# into the full details page instead of a new message being sent.
+# ---------------------------------------------------------------------------
+
+async def send_omdb_details_inline(client, inline_message_id, imdb_id, user_id=None):
+    """Edit an inline-inserted search-result card into the full details
+    page (poster + full info caption + Trailer/Watchlist/Done buttons),
+    in place, via its inline_message_id.
+    """
+    details = get_details(imdb_id)
+
+    if not details:
+        try:
+            await client.edit_inline_text(
+                inline_message_id, "❌ Could not find details for this title."
+            )
+        except Exception:
+            try:
+                await client.edit_inline_caption(
+                    inline_message_id, "❌ Could not find details for this title."
+                )
+            except Exception:
+                pass
+        return
+
+    total_episodes = None
+    if details.get("Type") == "series":
+        total_episodes = get_series_episode_count(imdb_id, details.get("totalSeasons"))
+
+    caption = format_omdb_details(details, total_episodes=total_episodes)
+
+    # Fetched eagerly (rather than on tap) since an inline message has no
+    # chat to reply a trailer link into - see build_details_keyboard()'s
+    # "inline" context above.
+    trailer_url = get_trailer_url(details.get("Title"), details.get("Year"))
+
+    in_watchlist = await is_in_watchlist(user_id, imdb_id) if user_id else False
+
+    buttons = build_details_keyboard(
+        imdb_id, in_watchlist, context="inline", trailer_url=trailer_url
+    )
+
+    poster = details.get("Poster")
+    poster = poster if poster and poster != "N/A" else None
+
+    try:
+        if poster:
+            await client.edit_inline_caption(inline_message_id, caption, reply_markup=buttons)
+        else:
+            await client.edit_inline_text(inline_message_id, caption, reply_markup=buttons)
+    except Exception:
+        # The card started out as the other kind of message (e.g. a
+        # text-only fallback card that now needs a poster, or a photo API
+        # edit rejected for some reason) - fall back to a plain text edit
+        # so the user still gets the full details even if the poster
+        # doesn't come along.
+        try:
+            await client.edit_inline_text(inline_message_id, caption, reply_markup=buttons)
+        except Exception:
+            pass
 
 
 # ---------------------------------------------------------------------------
