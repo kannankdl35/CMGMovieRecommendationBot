@@ -84,9 +84,19 @@ def get_series_info(series_id):
 # Used by both the "Find Movies" search results and the "/watchlist" listing.
 # ---------------------------------------------------------------------------
 
-async def send_omdb_details(client, chat_id, imdb_id):
+async def send_omdb_details(client, chat_id, imdb_id, in_watchlist=False):
     """Fetch full OMDb details for imdb_id and send a rich details message
-    with Poster, full info caption, and 🎬 Trailer / ❤️ Add to Watchlist buttons.
+    with Poster, full info caption, and 🎬 Trailer / watchlist action buttons.
+
+    `in_watchlist` controls which watchlist button is shown:
+    - False (default): this details page was opened from a search result
+      (Find Movies / inline search), so it shows ❤️ Add to Watchlist
+      (callback_data="addwl_<imdb_id>").
+    - True: this details page was opened from the user's own Watchlist
+      (tapping a number under /watchlist), so it shows
+      🗑 Delete from Watchlist (callback_data="delwl_<imdb_id>") instead -
+      handled in plugins/callback.py, which removes the title from the
+      database, deletes this message, and refreshes the watchlist listing.
     """
     details = get_details(imdb_id)
 
@@ -99,10 +109,19 @@ async def send_omdb_details(client, chat_id, imdb_id):
     poster = details.get("Poster")
     poster = poster if poster and poster != "N/A" else None
 
+    if in_watchlist:
+        watchlist_button = InlineKeyboardButton(
+            "🗑 Delete from Watchlist", callback_data=f"delwl_{imdb_id}"
+        )
+    else:
+        watchlist_button = InlineKeyboardButton(
+            "❤️ Add to Watchlist", callback_data=f"addwl_{imdb_id}"
+        )
+
     buttons = InlineKeyboardMarkup(
         [
             [InlineKeyboardButton("🎬 Trailer", callback_data=f"trailer_{imdb_id}")],
-            [InlineKeyboardButton("❤️ Add to Watchlist", callback_data=f"addwl_{imdb_id}")],
+            [watchlist_button],
         ]
     )
 
