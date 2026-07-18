@@ -1,6 +1,11 @@
 # ✅ Import series_details as well
 from services.details import movie_details, series_details
 
+# ✅ NEW: OMDb-based lookup + formatter, used by Find Movies / Watchlist (Feature 2 & 3)
+from services.omdb import get_details
+from utils.formatter import format_omdb_details
+from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+
 IMAGE_URL = "https://image.tmdb.org/t/p/w500"
 
 def get_movie_caption(movie):
@@ -72,3 +77,53 @@ def get_series_info(series_id):
     if not series:
         return None, None
     return get_series_caption(series)
+
+
+# ---------------------------------------------------------------------------
+# ✅ NEW: Feature 2 & 3 - Rich OMDb details page + Trailer / Watchlist buttons
+# Used by both the "Find Movies" search results and the "/watchlist" listing.
+# ---------------------------------------------------------------------------
+
+async def send_omdb_details(client, chat_id, imdb_id):
+    """Fetch full OMDb details for imdb_id and send a rich details message
+    with Poster, full info caption, and 🎬 Trailer / ❤️ Add to Watchlist buttons.
+    """
+    details = get_details(imdb_id)
+
+    if not details:
+        await client.send_message(chat_id, "❌ Could not find details for this title.")
+        return
+
+    caption = format_omdb_details(details)
+
+    poster = details.get("Poster")
+    poster = poster if poster and poster != "N/A" else None
+
+    buttons = InlineKeyboardMarkup(
+        [
+            [InlineKeyboardButton("🎬 Trailer", callback_data=f"trailer_{imdb_id}")],
+            [InlineKeyboardButton("❤️ Add to Watchlist", callback_data=f"addwl_{imdb_id}")],
+        ]
+    )
+
+    try:
+        if poster:
+            await client.send_photo(
+                chat_id=chat_id,
+                photo=poster,
+                caption=caption,
+                reply_markup=buttons
+            )
+        else:
+            await client.send_message(
+                chat_id=chat_id,
+                text=caption,
+                reply_markup=buttons
+            )
+    except Exception:
+        # ✅ Fallback to text if the poster URL fails to load as a photo
+        await client.send_message(
+            chat_id=chat_id,
+            text=caption,
+            reply_markup=buttons
+        )
