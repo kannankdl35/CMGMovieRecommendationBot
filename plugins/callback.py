@@ -79,24 +79,13 @@ async def callback_handler(client: Client, callback: CallbackQuery):
         return
 
     # ---------------- FIND MOVIES (Feature 1) ----------------
-
-    if data == "find_movies":
-
-        # Mark this user as "waiting to type a search query"
-        set_state(user_id, "awaiting_search", True)
-
-        await callback.message.edit_text(
-            "🔍 **Find Movies & Series**\n\n"
-            "Type the name of a movie or TV series you want to search for.",
-            reply_markup=InlineKeyboardMarkup(
-                [[InlineKeyboardButton("🏠 Home", callback_data="back_home")]]
-            )
-        )
-
-        await callback.answer()
-        return
+    # ✅ UPDATED: "Find Movies & Series" is now handled entirely by Telegram
+    # Inline Mode (see keyboards/home.py + plugins/inline.py). The button no
+    # longer sends callback_data, so there's nothing to handle here anymore.
 
     # ---------------- SEARCH RESULT SELECTED (Feature 1 -> Feature 2) ----------------
+    # Fired when the user taps "ℹ️ View Details" on a card sent either from
+    # an inline search result (plugins/inline.py) or from the Watchlist.
 
     if data.startswith("sr_"):
 
@@ -368,3 +357,4 @@ async def callback_handler(client: Client, callback: CallbackQuery):
     # ---------------- UNKNOWN ----------------
 
     await callback.answer()
+
