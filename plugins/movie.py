@@ -35,6 +35,13 @@ def recommendations(user_id):
         rating=state.get("rating"),
     )
 
-    text = format_movies(results)
+    # ✅ NEW (Feature 6): show the selected Genre / Language / IMDb Rating
+    # at the top of the results list.
+    text = format_movies(
+        results,
+        genre=state.get("genre"),
+        language=state.get("language"),
+        rating=state.get("rating"),
+    )
 
     return text, results
