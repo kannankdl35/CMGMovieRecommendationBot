@@ -9,6 +9,13 @@ def home_keyboard():
                     "🎥 Suggest Me",
                     callback_data="suggest_me"
                 )
+            ],
+            [
+                # ✅ NEW: Feature 1 - Find Movies button
+                InlineKeyboardButton(
+                    "🔍 Find Movies",
+                    callback_data="find_movies"
+                )
             ]
         ]
     )
