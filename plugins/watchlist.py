@@ -1,4 +1,3 @@
-
 from pyrogram import Client, filters
 
 from database.watchlist_db import get_watchlist
@@ -26,8 +25,7 @@ def build_watchlist_text(docs):
     limited/ordered) list of watchlist documents."""
     if not docs:
         return (
-            "📋 **Your Personal Watchlist**\n\n"
-            "Your watchlist is empty.\n\n"
+            "📭 Your watchlist is empty.\n\n"
             "Use 🔍 **Find Movies & Series** to search for a title, then tap "
             "❤️ **Add to Watchlist** on its details page to save it here."
         )
