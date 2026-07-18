@@ -6,6 +6,11 @@ from services.omdb import get_details
 from utils.formatter import format_omdb_details
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
+# ✅ NEW: used to auto-detect whether a title is already saved, so the
+# correct watchlist button (Add vs Delete) is shown regardless of where
+# the details page was opened from (Feature 2 & 3 fix).
+from database.watchlist_db import is_in_watchlist
+
 IMAGE_URL = "https://image.tmdb.org/t/p/w500"
 
 def get_movie_caption(movie):
@@ -84,19 +89,22 @@ def get_series_info(series_id):
 # Used by both the "Find Movies" search results and the "/watchlist" listing.
 # ---------------------------------------------------------------------------
 
-async def send_omdb_details(client, chat_id, imdb_id, in_watchlist=False):
+async def send_omdb_details(client, chat_id, imdb_id, user_id=None, in_watchlist=None):
     """Fetch full OMDb details for imdb_id and send a rich details message
     with Poster, full info caption, and 🎬 Trailer / watchlist action buttons.
 
     `in_watchlist` controls which watchlist button is shown:
-    - False (default): this details page was opened from a search result
-      (Find Movies / inline search), so it shows ❤️ Add to Watchlist
-      (callback_data="addwl_<imdb_id>").
-    - True: this details page was opened from the user's own Watchlist
-      (tapping a number under /watchlist), so it shows
-      🗑 Delete from Watchlist (callback_data="delwl_<imdb_id>") instead -
-      handled in plugins/callback.py, which removes the title from the
-      database, deletes this message, and refreshes the watchlist listing.
+    - None (default): auto-detect by checking the database for `user_id`
+      (Feature 2 & 3 fix) - this makes the button correct no matter where
+      the details page was opened from (a fresh search result or the
+      user's own Watchlist), instead of trusting the caller to know.
+    - True/False: explicit override, still supported for callers that
+      already know the answer (e.g. the Watchlist listing itself).
+
+    Shows ❤️ Add to Watchlist (callback_data="addwl_<imdb_id>") when the
+    title is NOT saved yet, or 🗑 Delete from Watchlist
+    (callback_data="delwl_<imdb_id>") when it already is - handled in
+    plugins/callback.py.
     """
     details = get_details(imdb_id)
 
@@ -108,6 +116,10 @@ async def send_omdb_details(client, chat_id, imdb_id, in_watchlist=False):
 
     poster = details.get("Poster")
     poster = poster if poster and poster != "N/A" else None
+
+    if in_watchlist is None:
+        # Auto-detect - falls back to False (Add) if we have no user_id to check.
+        in_watchlist = await is_in_watchlist(user_id, imdb_id) if user_id else False
 
     if in_watchlist:
         watchlist_button = InlineKeyboardButton(
