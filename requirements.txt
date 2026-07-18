@@ -3,4 +3,3 @@ tgcrypto==1.2.5
 python-dotenv==1.0.1
 motor==3.6.0
 requests==2.32.3
-aiohttp==3.10.11
