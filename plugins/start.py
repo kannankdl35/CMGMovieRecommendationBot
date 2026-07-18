@@ -1,5 +1,7 @@
 from pyrogram import Client, filters
-from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+
+# ✅ Reuse the shared home keyboard instead of duplicating buttons here
+from keyboards.home import home_keyboard
 
 print("✅ START PLUGIN LOADED")
 
@@ -15,19 +17,11 @@ async def start_command(client, message):
         "• 🎭 Genre\n"
         "• 🌍 Language\n"
         "• ⭐ IMDb Rating\n\n"
-        "Click the button below to start discovering your next favorite movie."
+        "Or use 🔍 **Find Movies** to search for a specific title.\n\n"
+        "Click a button below to get started."
     )
 
-    buttons = InlineKeyboardMarkup(
-        [
-            [
-                InlineKeyboardButton(
-                    "🎥 Suggest Me",
-                    callback_data="suggest_me"
-                )
-            ]
-        ]
-    )
+    buttons = home_keyboard()
 
     try:
         await message.reply_text(
