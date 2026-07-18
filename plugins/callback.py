@@ -14,15 +14,17 @@ from database.user_state import (
     clear_state,
 )
 
-# ✅ NEW: Watchlist database helpers (Feature 4 & 5)
-from database.watchlist_db import add_to_watchlist, get_watchlist, remove_from_watchlist
+# ✅ NEW: Watchlist database helper (Feature 5) - viewing/removing items now
+# happens inside the Watchlist Mini App (see plugins/watchlist.py +
+# webapp_server.py), so only add_to_watchlist is still needed here.
+from database.watchlist_db import add_to_watchlist
 
 # ✅ NEW: OMDb + YouTube services (Feature 1, 2 & 3)
 from services.omdb import get_details
 from services.youtube import get_trailer_url
 
-# ✅ NEW: Shared UI helpers for rendering result / watchlist cards
-from utils.ui import send_result_cards, send_watchlist_cards
+# ✅ NEW: Shared UI helper for rendering search-result cards
+from utils.ui import send_result_cards
 
 from plugins.movie import (
     recommendations as movie_recommendations,
@@ -107,54 +109,13 @@ async def callback_handler(client: Client, callback: CallbackQuery):
         await callback.answer()
         return
 
-    # ---------------- WATCHLIST: OPEN LIST (Feature 4) ----------------
-
-    if data == "wl_open":
-
-        items = await get_watchlist(user_id)
-
-        if not items:
-            await callback.answer("Your watchlist is empty.", show_alert=True)
-            return
-
-        # Convert stored DB docs into the shared card format used by send_watchlist_cards
-        cards = [
-            {
-                "Title": doc.get("title"),
-                "Year": doc.get("year"),
-                "Poster": doc.get("poster"),
-                "imdbID": doc.get("imdb_id"),
-                "Type": doc.get("media_type", "movie"),
-            }
-            for doc in items
-        ]
-
-        await callback.answer()
-        # ✅ CHANGED: watchlist items now render with 🗑 Delete / 🔗 Share
-        # buttons (matching the desired UX) instead of "ℹ️ View Details".
-        await send_watchlist_cards(client, callback.message.chat.id, cards)
-        return
-
-    # ---------------- WATCHLIST: DELETE ITEM (Feature 4) ----------------
-    # ✅ NEW: Handles the 🗑 Delete button on a watchlist card. Must be
-    # checked before the generic "wl_" details-open handler below.
-
-    if data.startswith("wldel_"):
-
-        imdb_id = data.replace("wldel_", "", 1)
-
-        removed = await remove_from_watchlist(user_id, imdb_id)
-
-        if removed:
-            await callback.answer("Removed from Watchlist 🗑", show_alert=False)
-            try:
-                await callback.message.delete()
-            except Exception:
-                pass
-        else:
-            await callback.answer("This title is no longer in your Watchlist.", show_alert=True)
-
-        return
+    # ---------------- WATCHLIST (Feature 4) ----------------
+    # ✅ CHANGED: Viewing, deleting, and sharing saved titles now happens
+    # inside the Watchlist Mini App (plugins/watchlist.py opens it with a
+    # web_app button; webapp_server.py + webapp/ serve it). Nothing sends
+    # "wl_open" or "wldel_" callback_data anymore, so those handlers were
+    # removed. "wl_<imdbID>" links are still handled below for backwards
+    # compatibility with any old cards already sitting in a user's chat.
 
     # ---------------- WATCHLIST: ITEM SELECTED (Feature 4 -> Feature 2) ----------------
     # (kept for any older "wl_<imdbID>" cards / links that may still be in use)
@@ -392,4 +353,3 @@ async def callback_handler(client: Client, callback: CallbackQuery):
     # ---------------- UNKNOWN ----------------
 
     await callback.answer()
-
