@@ -11,8 +11,8 @@ def home_keyboard():
                 )
             ],
             [
-                # ✅ UPDATED: Feature 1 - Find Movies & Series now uses Telegram
-                # Inline Mode instead of asking the user to type into the chat.
+                # ✅ Feature 1 - Find Movies & Series uses Telegram Inline
+                # Mode instead of asking the user to type into the chat.
                 # switch_inline_query_current_chat="" pre-fills
                 # "@<BotUsername> " in this same chat's message box, so the
                 # user can type a title and pick from live inline results
@@ -20,6 +20,16 @@ def home_keyboard():
                 InlineKeyboardButton(
                     "🔍 Find Movies & Series",
                     switch_inline_query_current_chat=""
+                )
+            ],
+            [
+                # ✅ NEW: Feature 4 - Watchlist button. Opens the watchlist
+                # entirely inside the Telegram chat (no Web App / external
+                # page) - see plugins/watchlist.py and the "watchlist_open"
+                # handler in plugins/callback.py.
+                InlineKeyboardButton(
+                    "📋 Watchlist",
+                    callback_data="watchlist_open"
                 )
             ]
         ]
