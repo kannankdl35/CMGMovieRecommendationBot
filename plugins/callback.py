@@ -14,8 +14,8 @@ from database.user_state import (
     clear_state,
 )
 
-# ✅ Watchlist database helper (Feature 5)
-from database.watchlist_db import add_to_watchlist
+# ✅ Watchlist database helpers (Feature 5)
+from database.watchlist_db import add_to_watchlist, remove_from_watchlist
 
 # ✅ NEW: Feature 4 - shared watchlist text/keyboard builder, used by the
 # 📋 Watchlist Home button (callback_data="watchlist_open" below) and by
@@ -138,7 +138,9 @@ async def callback_handler(client: Client, callback: CallbackQuery):
 
         imdb_id = data.replace("wl_", "", 1)
 
-        await send_omdb_details(client, callback.message.chat.id, imdb_id)
+        # ✅ in_watchlist=True -> shows 🗑 Delete from Watchlist instead of
+        # ❤️ Add to Watchlist, since this title is already saved.
+        await send_omdb_details(client, callback.message.chat.id, imdb_id, in_watchlist=True)
 
         await callback.answer()
         return
@@ -200,6 +202,38 @@ async def callback_handler(client: Client, callback: CallbackQuery):
         else:
             await callback.answer("Already in your Watchlist.", show_alert=True)
 
+        return
+
+    # ---------------- DELETE FROM WATCHLIST (Feature 4) ----------------
+    # Fired when the user taps "🗑 Delete from Watchlist" on a details page
+    # that was opened from the Watchlist itself (see the "wl_" handler
+    # above, which opens details with in_watchlist=True).
+
+    if data.startswith("delwl_"):
+
+        imdb_id = data.replace("delwl_", "", 1)
+
+        await remove_from_watchlist(user_id, imdb_id)
+
+        chat_id = callback.message.chat.id
+
+        # Remove the movie/series details message (photo or text) from the chat
+        try:
+            await callback.message.delete()
+        except Exception:
+            pass
+
+        # Refresh the watchlist listing so the deleted item no longer
+        # appears - shows "📭 Your watchlist is empty." if nothing is left.
+        text, keyboard = await get_watchlist_view(user_id)
+
+        await client.send_message(
+            chat_id=chat_id,
+            text=text,
+            reply_markup=keyboard,
+        )
+
+        await callback.answer("Removed from Watchlist 🗑")
         return
 
     # ---------------- MOVIES ----------------
