@@ -54,11 +54,20 @@ def _clean(value):
     return value
 
 
-def format_omdb_details(details):
+def format_omdb_details(details, total_episodes=None):
     """Build a rich caption for a movie/series using OMDb API data.
 
     Covers: Title, Release Year, Runtime, Genres, IMDb Rating, Vote Count,
     Content Rating, Language, Country, Director, Writers, Cast, Plot, Awards.
+
+    ✅ NEW (Feature 1): For a series, also shows the number of Seasons
+    (from OMDb's "totalSeasons" field) and the total number of Episodes.
+    `total_episodes` is computed separately via
+    services.omdb.get_series_episode_count(), since OMDb doesn't return it
+    directly - pass None to omit the Episodes line (e.g. it couldn't be
+    determined). This is used everywhere a title's details are shown -
+    Find Movies & Series, Watchlist, and Suggest Me - so all three stay
+    identical (Feature 2).
     """
     title = details.get("Title", "Unknown")
     year = details.get("Year", "-")
@@ -66,6 +75,7 @@ def format_omdb_details(details):
 
     runtime = _clean(details.get("Runtime"))
     genre = _clean(details.get("Genre"))
+    total_seasons = _clean(details.get("totalSeasons"))
     imdb_rating = _clean(details.get("imdbRating"))
     imdb_votes = _clean(details.get("imdbVotes"))
     rated = _clean(details.get("Rated"))
@@ -85,6 +95,11 @@ def format_omdb_details(details):
         caption += f"⏱ Runtime : {runtime}\n"
     if genre:
         caption += f"🎭 Genres : {genre}\n"
+    if media_type == "series":
+        if total_seasons:
+            caption += f"📊 Seasons : {total_seasons}\n"
+        if total_episodes:
+            caption += f"📺 Episodes : {total_episodes}\n"
     if imdb_rating:
         caption += f"⭐ IMDb Rating : {imdb_rating}/10\n"
     if imdb_votes:
