@@ -6,9 +6,15 @@ from pyrogram.types import (
     InputTextMessageContent,
     InlineKeyboardMarkup,
     InlineKeyboardButton,
+    ChosenInlineResult,
 )
 
 from services.omdb import search_titles, get_details
+
+# ✅ NEW (Feature 6): renders the full details page directly onto an
+# inline-inserted card the moment it's chosen - see
+# inline_result_chosen() at the bottom of this file.
+from plugins.details import send_omdb_details_inline
 
 # Feature 1 - Find Movies & Series (now via Telegram Inline Mode)
 # Telegram allows up to 50 inline results per answer; we cap it lower
@@ -70,9 +76,19 @@ async def inline_search_handler(client: Client, inline_query: InlineQuery):
 
     Replaces the old flow where the bot asked the user to type the title
     directly into the chat after pressing a button. Selecting a result here
-    sends a card into the chat with an "ℹ️ View Details" button using the
-    same 'sr_<imdbID>' callback_data already handled in plugins/callback.py,
-    so Feature 2/3/5 (details, trailer, watchlist) keep working unchanged.
+    inserts this short card into the chat, still carrying an "ℹ️ View
+    Details" button ('sr_<imdbID>' callback_data, handled in
+    plugins/callback.py) as a fallback.
+
+    ✅ CHANGED (Feature 6): normally the user never needs that button at
+    all - the instant Telegram reports the result as chosen,
+    inline_result_chosen() below edits this same card in place into the
+    full details page (poster + full info + Trailer/Watchlist/Done), so
+    the full details show up automatically right after selecting the
+    movie/series from the inline results. The "View Details" button only
+    still matters as a fallback for the rare case Telegram inline
+    feedback isn't enabled for this bot (via @BotFather's
+    /setinlinefeedback) and the chosen-result edit never fires.
     """
     query = inline_query.query.strip()
 
@@ -152,4 +168,38 @@ async def inline_search_handler(client: Client, inline_query: InlineQuery):
         results=answers,
         cache_time=30,
         is_personal=True,
+    )
+
+
+# ---------------------------------------------------------------------------
+# ✅ NEW (Feature 6): fires the instant a user taps one of the inline
+# results above. Turns that short "via @BotName" card straight into the
+# full details page (poster + full info + Trailer/Watchlist/Done buttons)
+# by editing it in place - no separate "View Details" tap required.
+#
+# IMPORTANT: this requires inline feedback to be enabled for the bot -
+# in @BotFather run /setinlinefeedback, pick this bot, and set it to
+# 100%. Without that, Telegram will not reliably report chosen results
+# and this handler won't fire (the "ℹ️ View Details" button on the card
+# stays as the fallback in that case).
+# ---------------------------------------------------------------------------
+
+@Client.on_chosen_inline_result()
+async def inline_result_chosen(client: Client, chosen: ChosenInlineResult):
+    # The result id was set to the title's imdbID when the card was built
+    # above (id=imdb_id on both InlineQueryResultPhoto and
+    # InlineQueryResultArticle).
+    imdb_id = chosen.result_id
+
+    # inline_message_id is only present when the bot can edit the message
+    # it just caused Telegram to insert (requires inline feedback to be
+    # enabled, see note above, and reply_markup to have been attached to
+    # the chosen result - both true here). Nothing to edit otherwise.
+    if not imdb_id or not chosen.inline_message_id:
+        return
+
+    user_id = chosen.from_user.id if chosen.from_user else None
+
+    await send_omdb_details_inline(
+        client, chosen.inline_message_id, imdb_id, user_id=user_id
     )
