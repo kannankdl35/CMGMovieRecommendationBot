@@ -61,3 +61,15 @@ async def is_in_watchlist(user_id, imdb_id):
         {"user_id": user_id, "imdb_id": imdb_id}
     )
     return doc is not None
+
+
+# ✅ NEW: Feature 4 - Remove a title from a user's watchlist (powers the
+# 🗑 Delete button shown on each watchlist card).
+async def remove_from_watchlist(user_id, imdb_id):
+    """Delete a single watchlist entry for this user.
+    Returns True if a document was actually removed, False if it wasn't
+    there to begin with (e.g. double tap / already deleted)."""
+    result = await watchlist_collection.delete_one(
+        {"user_id": user_id, "imdb_id": imdb_id}
+    )
+    return result.deleted_count > 0
