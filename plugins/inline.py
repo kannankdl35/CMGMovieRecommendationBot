@@ -8,12 +8,59 @@ from pyrogram.types import (
     InlineKeyboardButton,
 )
 
-from services.omdb import search_titles
+from services.omdb import search_titles, get_details
 
-# ✅ Feature 1 - Find Movies & Series (now via Telegram Inline Mode)
+# Feature 1 - Find Movies & Series (now via Telegram Inline Mode)
 # Telegram allows up to 50 inline results per answer; we cap it lower
 # to keep results relevant and responses fast.
 INLINE_RESULT_LIMIT = 20
+
+
+def _clean(value):
+    """OMDb uses the literal string 'N/A' for missing fields - treat that
+    the same as missing so it's skipped instead of printed as 'N/A'."""
+    if not value or value == "N/A":
+        return None
+    return value
+
+
+def _build_card_caption(label, title, year, extra):
+    """Build the inline search-result card caption.
+
+    CHANGED: Previously this was just the media type + title + year
+    (e.g. "Movie\n**Iron Man 3** (2013)"). Now also shows Language and
+    Release Date when OMDb has them, so the first message a user sees
+    already carries more than just the name (Feature 4 fix).
+    """
+    caption = f"{label}\n**{title}** ({year})"
+
+    release_date = extra.get("release_date")
+    language = extra.get("language")
+
+    if release_date:
+        caption += f"\n📅 Release : {release_date}"
+    if language:
+        caption += f"\n🗣 Language : {language}"
+
+    return caption
+
+
+def _fetch_extra_info(imdb_id):
+    """Best-effort lookup of Release Date + Language for one search result.
+
+    OMDb's search endpoint (used by search_titles) only returns
+    Title/Year/imdbID/Type/Poster - Language and full Release date require
+    a separate per-title lookup. Failures here just mean those two extra
+    lines are omitted from the card; they never block showing the result.
+    """
+    details = get_details(imdb_id)
+    if not details:
+        return {}
+
+    return {
+        "release_date": _clean(details.get("Released")),
+        "language": _clean(details.get("Language")),
+    }
 
 
 @Client.on_inline_query()
@@ -67,7 +114,11 @@ async def inline_search_handler(client: Client, inline_query: InlineQuery):
 
         label = "📺 Series" if media_type == "series" else "🎬 Movie"
         description = f"{label} • {year}"
-        caption = f"{label}\n**{title}** ({year})"
+
+        # NEW: pull Language + Release Date for this title so the very
+        # first card the user sees isn't just the bare title (Feature 4 fix).
+        extra = _fetch_extra_info(imdb_id)
+        caption = _build_card_caption(label, title, year, extra)
 
         buttons = InlineKeyboardMarkup(
             [[InlineKeyboardButton("ℹ️ View Details", callback_data=f"sr_{imdb_id}")]]
@@ -102,4 +153,3 @@ async def inline_search_handler(client: Client, inline_query: InlineQuery):
         cache_time=30,
         is_personal=True,
     )
-
