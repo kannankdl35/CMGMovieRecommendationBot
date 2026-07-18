@@ -17,3 +17,8 @@ YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY")
 
 MONGO_URI = os.getenv("MONGO_URI")
 DATABASE_NAME = os.getenv("DATABASE_NAME", "CMGMovieRecommendationBot")
+
+# ✅ NEW: Telegram Mini App (Web App) - public HTTPS URL where webapp_server.py
+# is deployed (serves the /webapp front-end + /api/watchlist endpoints).
+# Must be https:// - Telegram will not open a Web App button over plain http.
+WEBAPP_URL = os.getenv("WEBAPP_URL", "https://example.com")
