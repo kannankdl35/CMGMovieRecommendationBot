@@ -14,10 +14,14 @@ from database.user_state import (
     clear_state,
 )
 
-# ✅ NEW: Watchlist database helper (Feature 5) - viewing/removing items now
-# happens inside the Watchlist Mini App (see plugins/watchlist.py +
-# webapp_server.py), so only add_to_watchlist is still needed here.
+# ✅ Watchlist database helper (Feature 5)
 from database.watchlist_db import add_to_watchlist
+
+# ✅ NEW: Feature 4 - shared watchlist text/keyboard builder, used by the
+# 📋 Watchlist Home button (callback_data="watchlist_open" below) and by
+# the /watchlist command in plugins/watchlist.py. Everything renders
+# inside this Telegram chat - no Web App / external page.
+from plugins.watchlist import get_watchlist_view
 
 # ✅ NEW: OMDb + YouTube services (Feature 1, 2 & 3)
 from services.omdb import get_details
@@ -81,9 +85,9 @@ async def callback_handler(client: Client, callback: CallbackQuery):
         return
 
     # ---------------- FIND MOVIES (Feature 1) ----------------
-    # ✅ UPDATED: "Find Movies & Series" is now handled entirely by Telegram
-    # Inline Mode (see keyboards/home.py + plugins/inline.py). The button no
-    # longer sends callback_data, so there's nothing to handle here anymore.
+    # ✅ "Find Movies & Series" is handled entirely by Telegram Inline Mode
+    # (see keyboards/home.py + plugins/inline.py). The button doesn't send
+    # callback_data, so there's nothing to handle here.
 
     # ---------------- SEARCH RESULT SELECTED (Feature 1 -> Feature 2) ----------------
     # Fired when the user taps "ℹ️ View Details" on a card sent either from
@@ -110,15 +114,25 @@ async def callback_handler(client: Client, callback: CallbackQuery):
         return
 
     # ---------------- WATCHLIST (Feature 4) ----------------
-    # ✅ CHANGED: Viewing, deleting, and sharing saved titles now happens
-    # inside the Watchlist Mini App (plugins/watchlist.py opens it with a
-    # web_app button; webapp_server.py + webapp/ serve it). Nothing sends
-    # "wl_open" or "wldel_" callback_data anymore, so those handlers were
-    # removed. "wl_<imdbID>" links are still handled below for backwards
-    # compatibility with any old cards already sitting in a user's chat.
+    # ✅ CHANGED: The watchlist now works completely inside this Telegram
+    # chat - no Web App / Mini App / external page. Tapping the 📋
+    # Watchlist Home button sends "watchlist_open", which prints the
+    # user's saved titles as a numbered text list with numbered inline
+    # buttons underneath (plugins/watchlist.py + keyboards/watchlist.py).
+
+    if data == "watchlist_open":
+
+        text, keyboard = await get_watchlist_view(user_id)
+
+        await callback.message.edit_text(text, reply_markup=keyboard)
+
+        await callback.answer()
+        return
 
     # ---------------- WATCHLIST: ITEM SELECTED (Feature 4 -> Feature 2) ----------------
-    # (kept for any older "wl_<imdbID>" cards / links that may still be in use)
+    # Fired when the user taps one of the numbered buttons under the
+    # watchlist listing above ("wl_<imdbID>") - shows that title's full
+    # details page, same as a Find Movies search result.
 
     if data.startswith("wl_"):
 
