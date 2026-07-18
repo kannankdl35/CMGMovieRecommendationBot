@@ -35,3 +35,25 @@ def get_results(user_id: int):
 def clear_results(user_id: int):
     if user_id in user_states:
         user_states[user_id].pop("results", None)
+
+
+# ---------- Watchlist listing message tracking ----------
+# ✅ NEW: Remembers the (chat_id, message_id) of the last watchlist listing
+# message shown to a user, so a fresh /watchlist or a refresh after
+# add/delete can remove the previous listing instead of leaving duplicates
+# stacked in the chat.
+
+def set_last_watchlist_message(user_id: int, chat_id: int, message_id: int):
+    if user_id not in user_states:
+        user_states[user_id] = {}
+
+    user_states[user_id]["watchlist_msg"] = (chat_id, message_id)
+
+
+def get_last_watchlist_message(user_id: int):
+    return user_states.get(user_id, {}).get("watchlist_msg")
+
+
+def clear_last_watchlist_message(user_id: int):
+    if user_id in user_states:
+        user_states[user_id].pop("watchlist_msg", None)
