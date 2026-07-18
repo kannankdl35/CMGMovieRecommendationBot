@@ -10,7 +10,7 @@ async def watchlist_command(client, message):
     text = (
         "📋 **Your Personal Watchlist**\n\n"
         "Movies and series you've saved show up here.\n"
-        "Tap the button below to view them."
+        "Tap the button below to view, delete, or share them."
     )
 
     buttons = InlineKeyboardMarkup(
