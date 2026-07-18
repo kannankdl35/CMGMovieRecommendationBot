@@ -91,7 +91,18 @@ async def callback_handler(client: Client, callback: CallbackQuery):
 
         imdb_id = data.replace("sr_", "", 1)
 
-        await send_omdb_details(client, callback.message.chat.id, imdb_id)
+        # ✅ FIX: Cards selected from an inline search (the "via @BotName"
+        # messages Telegram inserts directly, as in plugins/inline.py) are
+        # NOT sent by the bot itself, so Pyrogram gives us
+        # callback.message == None (only callback.inline_message_id is set
+        # for those). The old code unconditionally read
+        # callback.message.chat.id, which raised an AttributeError before
+        # callback.answer() ran — so tapping "ℹ️ View Details" on an inline
+        # result silently did nothing. Fall back to the user's own chat,
+        # which is where these inline cards are actually viewed.
+        chat_id = callback.message.chat.id if callback.message else callback.from_user.id
+
+        await send_omdb_details(client, chat_id, imdb_id)
 
         await callback.answer()
         return
