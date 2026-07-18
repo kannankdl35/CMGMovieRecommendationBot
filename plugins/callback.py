@@ -40,26 +40,10 @@ from plugins.series import (
 )
 
 from plugins.details import (
-    get_movie_info,
-    get_series_info,
-    send_omdb_details,  # Feature 2 & 3 details renderer
+    send_omdb_details,       # Feature 2 & 3 details renderer (Find Movies / Watchlist)
+    send_suggested_details,  # Feature 2 details renderer (Suggest Me)
+    build_details_keyboard,  # Shared Trailer/Watchlist/Done keyboard builder
 )
-
-
-def _watchlist_button(imdb_id, in_watchlist):
-    """Build the single Add/Delete watchlist inline button for a details page.
-
-    NEW: Shared helper so the "add" and "delete" callback handlers can
-    both toggle a details message's button in place after the action
-    completes, instead of leaving the old label showing (Feature 2 fix).
-    """
-    if in_watchlist:
-        return InlineKeyboardButton(
-            "🗑 Delete from Watchlist", callback_data=f"delwl_{imdb_id}"
-        )
-    return InlineKeyboardButton(
-        "❤️ Add to Watchlist", callback_data=f"addwl_{imdb_id}"
-    )
 
 
 @Client.on_callback_query()
@@ -155,6 +139,9 @@ async def callback_handler(client: Client, callback: CallbackQuery):
 
         # user_id passed so send_omdb_details auto-detects whether this
         # title is already saved and shows the correct button (Feature 3 fix).
+        # context="search" (default) -> this is a "Find Movies & Series"
+        # details page: Delete from Watchlist toggles in place and a Done
+        # button is shown (Feature 4 & 5).
         await send_omdb_details(client, chat_id, imdb_id, user_id=user_id)
 
         await callback.answer()
@@ -196,12 +183,37 @@ async def callback_handler(client: Client, callback: CallbackQuery):
         # in_watchlist=True -> shows Delete from Watchlist instead of Add
         # to Watchlist, since this title is already saved (it came from
         # the user's own watchlist listing).
+        # context="watchlist" -> keeps the ORIGINAL behavior for this
+        # entry point only: tapping Delete removes the message and
+        # refreshes the watchlist listing. No Done button here.
         await send_omdb_details(
-            client, callback.message.chat.id, imdb_id, user_id=user_id, in_watchlist=True
+            client, callback.message.chat.id, imdb_id,
+            user_id=user_id, in_watchlist=True, context="watchlist",
         )
 
         await callback.answer()
         return
+
+    # ---------------- SUGGEST ME: ITEM SELECTED (Feature 2) ----------------
+    # Fired when the user taps a numbered button under a "Suggest Me"
+    # recommendation list ("movie_<tmdbID>", where the id is a TMDB id).
+    # Shows the exact same details page (info + Trailer / Watchlist /
+    # Done buttons) as "Find Movies & Series".
+
+    if data.startswith("movie_"):
+        item_id = data.replace("movie_", "")
+        if item_id.isdigit():
+            # Check user state to determine if series or movie
+            state = get_state(user_id)
+            media_type = "series" if state.get("type") == "series" else "movie"
+
+            await send_suggested_details(
+                client, callback.message.chat.id, int(item_id),
+                media_type, user_id=user_id,
+            )
+
+            await callback.answer()
+            return
 
     # ---------------- TRAILER (Feature 3) ----------------
 
@@ -232,9 +244,13 @@ async def callback_handler(client: Client, callback: CallbackQuery):
         return
 
     # ---------------- ADD TO WATCHLIST (Feature 3 -> Feature 5) ----------------
-    # CHANGED: After adding, the button on this same details message is
-    # swapped from Add to Watchlist to Delete from Watchlist instead of
-    # staying the same (Feature 2 fix). The Trailer button is preserved.
+    # Fired from a "Find Movies & Series" or "Suggest Me" details page
+    # (the only places an "Add to Watchlist" button can appear - the
+    # Watchlist listing's own details page always starts already saved).
+    #
+    # After adding, the button on this same details message is swapped to
+    # "Delete from Watchlist" IN PLACE, keeping the Trailer and Done
+    # buttons intact (Feature 2 & 4 fix).
 
     if data.startswith("addwl_"):
 
@@ -258,15 +274,11 @@ async def callback_handler(client: Client, callback: CallbackQuery):
             media_type=details.get("Type", "movie"),
         )
 
-        # Swap the button on the details message to "Delete from Watchlist"
-        # now that the title is saved, whether it was just added or was
-        # already there.
-        new_markup = InlineKeyboardMarkup(
-            [
-                [InlineKeyboardButton("🎬 Trailer", callback_data=f"trailer_{imdb_id}")],
-                [_watchlist_button(imdb_id, in_watchlist=True)],
-            ]
-        )
+        # This button only ever appears on a "search"-context (Find Movies
+        # & Series / Suggest Me) details page, so rebuild with the same
+        # context: Trailer + Delete from Watchlist (toggles in place from
+        # here on) + Done.
+        new_markup = build_details_keyboard(imdb_id, in_watchlist=True, context="search")
 
         try:
             await callback.message.edit_reply_markup(reply_markup=new_markup)
@@ -280,12 +292,50 @@ async def callback_handler(client: Client, callback: CallbackQuery):
 
         return
 
+    # ---------------- REMOVE FROM WATCHLIST, IN PLACE (Feature 4) ----------------
+    # Fired when "Delete from Watchlist" is tapped on a "Find Movies &
+    # Series" or "Suggest Me" details page. Unlike the Watchlist listing's
+    # own Delete button below, this does NOT delete the message or open
+    # the watchlist - it removes the title from the database, shows a
+    # popup confirmation, and swaps the button back to "Add to Watchlist"
+    # on the same message.
+
+    if data.startswith("rmwl_"):
+
+        imdb_id = data.replace("rmwl_", "", 1)
+
+        await remove_from_watchlist(user_id, imdb_id)
+
+        new_markup = build_details_keyboard(imdb_id, in_watchlist=False, context="search")
+
+        try:
+            await callback.message.edit_reply_markup(reply_markup=new_markup)
+        except Exception:
+            pass
+
+        await callback.answer("Removed from Watchlist 🗑", show_alert=True)
+        return
+
+    # ---------------- DONE (Feature 5) ----------------
+    # Fired when "✅ Done" is tapped on a "Find Movies & Series" or
+    # "Suggest Me" details page - simply dismisses that details message.
+
+    if data == "done":
+
+        try:
+            await callback.message.delete()
+        except Exception:
+            pass
+
+        await callback.answer()
+        return
+
     # ---------------- DELETE FROM WATCHLIST (Feature 4) ----------------
-    # Fired when the user taps "Delete from Watchlist" - either on a
-    # details page opened from the Watchlist itself (the "wl_" handler
-    # above) or on a details page opened from a fresh search once the
-    # title had already been saved (Feature 3 fix means this button can
-    # now appear there too).
+    # Fired when the user taps "Delete from Watchlist" on a details page
+    # opened from the Watchlist itself (the "wl_" handler above, the only
+    # entry point that uses context="watchlist"). Behavior is unchanged:
+    # the item is removed, this details message is deleted, and the
+    # watchlist listing is refreshed.
 
     if data.startswith("delwl_"):
 
@@ -417,47 +467,10 @@ async def callback_handler(client: Client, callback: CallbackQuery):
         await callback.answer()
         return
 
-    # ---------------- MOVIE DETAILS ----------------
-
-# Handles both movies and series
-    if data.startswith("movie_"):
-        item_id = data.replace("movie_", "")
-        if item_id.isdigit():
-            # Check user state to determine if series or movie
-            state = get_state(user_id)
-            is_series = state.get("type") == "series"
-
-            if is_series:
-                poster, caption = get_series_info(int(item_id))  # Series
-                error_msg = "Series not found."
-            else:
-                poster, caption = get_movie_info(int(item_id))  # Movie
-                error_msg = "Movie not found."
-
-            if caption is None:
-                await callback.answer(error_msg, show_alert=True)
-                return
-            # ... send photo/message
-
-            if poster:
-
-                await client.send_photo(
-                    chat_id=callback.message.chat.id,
-                    photo=poster,
-                    caption=caption
-                )
-
-            else:
-
-                await callback.message.reply_text(caption)
-
-            await callback.answer()
-            return
-
     # ---------------- PAGINATION ----------------
 
     # REMOVED: Entire pagination handler deleted
-# (No need for page handling since we only show 10 items)
+    # (No need for page handling since we only show 10 items)
 
     # ---------------- BACK ----------------
 
