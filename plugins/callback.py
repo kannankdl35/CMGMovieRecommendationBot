@@ -184,8 +184,10 @@ async def callback_handler(client: Client, callback: CallbackQuery):
         # to Watchlist, since this title is already saved (it came from
         # the user's own watchlist listing).
         # context="watchlist" -> keeps the ORIGINAL behavior for this
-        # entry point only: tapping Delete removes the message and
-        # refreshes the watchlist listing. No Done button here.
+        # entry point: tapping Delete removes the item, deletes this
+        # message, and refreshes the watchlist listing. A "✅ Done" button
+        # is also shown here (Feature 6) so the user can dismiss the
+        # details message on its own without deleting the saved item.
         await send_omdb_details(
             client, callback.message.chat.id, imdb_id,
             user_id=user_id, in_watchlist=True, context="watchlist",
@@ -274,16 +276,33 @@ async def callback_handler(client: Client, callback: CallbackQuery):
             media_type=details.get("Type", "movie"),
         )
 
-        # This button only ever appears on a "search"-context (Find Movies
-        # & Series / Suggest Me) details page, so rebuild with the same
-        # context: Trailer + Delete from Watchlist (toggles in place from
-        # here on) + Done.
-        new_markup = build_details_keyboard(imdb_id, in_watchlist=True, context="search")
-
-        try:
-            await callback.message.edit_reply_markup(reply_markup=new_markup)
-        except Exception:
-            pass
+        if callback.message:
+            # This button only ever appears on a "search"-context (Find
+            # Movies & Series / Suggest Me) details page, so rebuild with
+            # the same context: Trailer + Delete from Watchlist (toggles
+            # in place from here on) + Done.
+            new_markup = build_details_keyboard(imdb_id, in_watchlist=True, context="search")
+            try:
+                await callback.message.edit_reply_markup(reply_markup=new_markup)
+            except Exception:
+                pass
+        elif callback.inline_message_id:
+            # NEW (Feature 6): details page opened directly from an inline
+            # search result (plugins/inline.py's inline_result_chosen()) -
+            # there's no chat message object here, only an
+            # inline_message_id, so the keyboard has to be rebuilt with a
+            # real Trailer URL button (context="inline") and pushed via
+            # edit_inline_reply_markup instead of edit_reply_markup.
+            trailer_url = get_trailer_url(details.get("Title"), details.get("Year"))
+            new_markup = build_details_keyboard(
+                imdb_id, in_watchlist=True, context="inline", trailer_url=trailer_url
+            )
+            try:
+                await client.edit_inline_reply_markup(
+                    callback.inline_message_id, reply_markup=new_markup
+                )
+            except Exception:
+                pass
 
         if added:
             await callback.answer("Added to Watchlist ✅")
@@ -306,26 +325,62 @@ async def callback_handler(client: Client, callback: CallbackQuery):
 
         await remove_from_watchlist(user_id, imdb_id)
 
-        new_markup = build_details_keyboard(imdb_id, in_watchlist=False, context="search")
-
-        try:
-            await callback.message.edit_reply_markup(reply_markup=new_markup)
-        except Exception:
-            pass
+        if callback.message:
+            new_markup = build_details_keyboard(imdb_id, in_watchlist=False, context="search")
+            try:
+                await callback.message.edit_reply_markup(reply_markup=new_markup)
+            except Exception:
+                pass
+        elif callback.inline_message_id:
+            # NEW (Feature 6): same inline-details case as "addwl_" above.
+            details = get_details(imdb_id)
+            trailer_url = (
+                get_trailer_url(details.get("Title"), details.get("Year"))
+                if details else None
+            )
+            new_markup = build_details_keyboard(
+                imdb_id, in_watchlist=False, context="inline", trailer_url=trailer_url
+            )
+            try:
+                await client.edit_inline_reply_markup(
+                    callback.inline_message_id, reply_markup=new_markup
+                )
+            except Exception:
+                pass
 
         await callback.answer("Removed from Watchlist 🗑", show_alert=True)
         return
 
-    # ---------------- DONE (Feature 5) ----------------
-    # Fired when "✅ Done" is tapped on a "Find Movies & Series" or
-    # "Suggest Me" details page - simply dismisses that details message.
+    # ---------------- DONE (Feature 5 & 6) ----------------
+    # Fired when "✅ Done" is tapped on any details page - "Find Movies &
+    # Series", "Suggest Me", the Watchlist's own details page, or (NEW,
+    # Feature 6) the full-details page shown automatically after picking a
+    # title from an inline search. This only dismisses/clears that details
+    # message - it never touches the saved watchlist entry itself.
 
     if data == "done":
 
-        try:
-            await callback.message.delete()
-        except Exception:
-            pass
+        if callback.message:
+            try:
+                await callback.message.delete()
+            except Exception:
+                pass
+        elif callback.inline_message_id:
+            # NEW (Feature 6): a message inserted via inline mode can't be
+            # deleted through the Bot API - the closest available action
+            # is clearing its buttons and marking it as dismissed, same
+            # fallback already used for "sr_" above.
+            try:
+                await client.edit_inline_caption(
+                    callback.inline_message_id, "✅ Done.", reply_markup=None
+                )
+            except Exception:
+                try:
+                    await client.edit_inline_text(
+                        callback.inline_message_id, "✅ Done.", reply_markup=None
+                    )
+                except Exception:
+                    pass
 
         await callback.answer()
         return
