@@ -12,6 +12,7 @@ from database.user_state import (
     set_state,
     get_state,
     clear_state,
+    get_results,
 )
 
 # Watchlist database helpers (Feature 5)
@@ -209,8 +210,29 @@ async def callback_handler(client: Client, callback: CallbackQuery):
             state = get_state(user_id)
             media_type = "series" if state.get("type") == "series" else "movie"
 
+            # ✅ CHANGED: title/year now come from the TMDB discover
+            # results already cached for this user (saved by the
+            # "rating_" handler below via save_results()) instead of a
+            # second live TMDB /movie or /tv lookup - TMDB is only used
+            # to build/sort this list, never to source details.
+            results = get_results(user_id)
+            item = next(
+                (r for r in results if str(r.get("id")) == item_id), None
+            )
+
+            if item:
+                if media_type == "series":
+                    title = item.get("name")
+                    release_date = item.get("first_air_date")
+                else:
+                    title = item.get("title")
+                    release_date = item.get("release_date")
+                year = release_date[:4] if release_date else None
+            else:
+                title, year = None, None
+
             await send_suggested_details(
-                client, callback.message.chat.id, int(item_id),
+                client, callback.message.chat.id, title, year,
                 media_type, user_id=user_id,
             )
 
