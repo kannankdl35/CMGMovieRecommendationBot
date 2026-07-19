@@ -24,8 +24,8 @@ from database.watchlist_db import add_to_watchlist, remove_from_watchlist
 # Web App / external page.
 from plugins.watchlist import send_watchlist_view
 
-# OMDb + YouTube services (Feature 1, 2 & 3)
-from services.omdb import get_details
+# IMDb API + YouTube services (Feature 1, 2 & 3)
+from services.imdb import get_details
 from services.youtube import get_trailer_url
 
 # Shared UI helper for rendering search-result cards
@@ -40,7 +40,7 @@ from plugins.series import (
 )
 
 from plugins.details import (
-    send_omdb_details,       # Feature 2 & 3 details renderer (Find Movies / Watchlist)
+    send_imdb_details,       # Feature 2 & 3 details renderer (Find Movies / Watchlist)
     send_suggested_details,  # Feature 2 details renderer (Suggest Me)
     build_details_keyboard,  # Shared Trailer/Watchlist/Done keyboard builder
 )
@@ -137,12 +137,12 @@ async def callback_handler(client: Client, callback: CallbackQuery):
                 except Exception:
                     pass
 
-        # user_id passed so send_omdb_details auto-detects whether this
+        # user_id passed so send_imdb_details auto-detects whether this
         # title is already saved and shows the correct button (Feature 3 fix).
         # context="search" (default) -> this is a "Find Movies & Series"
         # details page: Delete from Watchlist toggles in place and a Done
         # button is shown (Feature 4 & 5).
-        await send_omdb_details(client, chat_id, imdb_id, user_id=user_id)
+        await send_imdb_details(client, chat_id, imdb_id, user_id=user_id)
 
         await callback.answer()
         return
@@ -188,7 +188,7 @@ async def callback_handler(client: Client, callback: CallbackQuery):
         # message, and refreshes the watchlist listing. A "✅ Done" button
         # is also shown here (Feature 6) so the user can dismiss the
         # details message on its own without deleting the saved item.
-        await send_omdb_details(
+        await send_imdb_details(
             client, callback.message.chat.id, imdb_id,
             user_id=user_id, in_watchlist=True, context="watchlist",
         )
