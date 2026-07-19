@@ -9,12 +9,12 @@ from pyrogram.types import (
     ChosenInlineResult,
 )
 
-from services.omdb import search_titles, get_details
+from services.imdb import search_titles, get_details
 
 # ✅ NEW (Feature 6): renders the full details page directly onto an
 # inline-inserted card the moment it's chosen - see
 # inline_result_chosen() at the bottom of this file.
-from plugins.details import send_omdb_details_inline
+from plugins.details import send_imdb_details_inline
 
 # Feature 1 - Find Movies & Series (now via Telegram Inline Mode)
 # Telegram allows up to 50 inline results per answer; we cap it lower
@@ -23,8 +23,8 @@ INLINE_RESULT_LIMIT = 20
 
 
 def _clean(value):
-    """OMDb uses the literal string 'N/A' for missing fields - treat that
-    the same as missing so it's skipped instead of printed as 'N/A'."""
+    """The IMDb API leaves unavailable fields as None - treat that the
+    same as missing so it's skipped instead of printed."""
     if not value or value == "N/A":
         return None
     return value
@@ -35,7 +35,7 @@ def _build_card_caption(label, title, year, extra):
 
     CHANGED: Previously this was just the media type + title + year
     (e.g. "Movie\n**Iron Man 3** (2013)"). Now also shows Language and
-    Release Date when OMDb has them, so the first message a user sees
+    Release Date when the IMDb API has them, so the first message a user sees
     already carries more than just the name (Feature 4 fix).
     """
     caption = f"{label}\n**{title}** ({year})"
@@ -52,19 +52,22 @@ def _build_card_caption(label, title, year, extra):
 
 
 def _fetch_extra_info(imdb_id):
-    """Best-effort lookup of Release Date + Language for one search result.
+    """Best-effort lookup of Type + Release Date + Language for one search
+    result.
 
-    OMDb's search endpoint (used by search_titles) only returns
-    Title/Year/imdbID/Type/Poster - Language and full Release date require
-    a separate per-title lookup. Failures here just mean those two extra
-    lines are omitted from the card; they never block showing the result.
+    Unlike OMDb's old search endpoint, the IMDb API's /search?q= results
+    don't report a movie/series type, a full release date, or a language
+    up front - all three require a separate per-title lookup. Failures
+    here just mean the type falls back to "movie" and the two extra
+    caption lines are omitted; they never block showing the result.
     """
     details = get_details(imdb_id)
     if not details:
         return {}
 
     return {
-        "release_date": _clean(details.get("Released")),
+        "type": details.get("Type"),
+        "release_date": _clean(details.get("Year")),
         "language": _clean(details.get("Language")),
     }
 
@@ -122,18 +125,23 @@ async def inline_search_handler(client: Client, inline_query: InlineQuery):
         title = item.get("Title", "Unknown")
         year = item.get("Year", "-")
         imdb_id = item.get("imdbID")
-        media_type = item.get("Type", "movie")
         poster = item.get("Poster")
 
         if not imdb_id:
             continue
 
+        # NEW: pull Type + Language + Release Date for this title so the
+        # very first card the user sees isn't just the bare title
+        # (Feature 4 fix). The IMDb search endpoint doesn't report a
+        # movie/series type up front the way OMDb's did, so this lookup
+        # now also decides the 📺/🎬 label - defaults to "movie" if it
+        # can't be determined.
+        extra = _fetch_extra_info(imdb_id)
+        media_type = extra.get("type") or "movie"
+
         label = "📺 Series" if media_type == "series" else "🎬 Movie"
         description = f"{label} • {year}"
 
-        # NEW: pull Language + Release Date for this title so the very
-        # first card the user sees isn't just the bare title (Feature 4 fix).
-        extra = _fetch_extra_info(imdb_id)
         caption = _build_card_caption(label, title, year, extra)
 
         buttons = InlineKeyboardMarkup(
@@ -200,6 +208,6 @@ async def inline_result_chosen(client: Client, chosen: ChosenInlineResult):
 
     user_id = chosen.from_user.id if chosen.from_user else None
 
-    await send_omdb_details_inline(
+    await send_imdb_details_inline(
         client, chosen.inline_message_id, imdb_id, user_id=user_id
     )
