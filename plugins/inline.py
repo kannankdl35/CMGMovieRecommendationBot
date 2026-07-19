@@ -1,3 +1,5 @@
+import asyncio
+
 from pyrogram import Client
 from pyrogram.types import (
     InlineQuery,
@@ -21,6 +23,31 @@ from plugins.details import send_imdb_details_inline
 # to keep results relevant and responses fast.
 INLINE_RESULT_LIMIT = 20
 
+# ---------------------------------------------------------------------------
+# ✅ BUGFIX: the inline query list was previously coming back empty
+# ("QUERY_ID_INVALID" in the logs). The handler was fetching Type +
+# Language + Release Date for EACH search result ONE AT A TIME
+# (`get_details()`, which used to make up to 3 blocking HTTP calls per
+# title) before ever calling `inline_query.answer()`. With up to
+# INLINE_RESULT_LIMIT results that could take well over Telegram's inline
+# query timeout, so by the time the bot tried to answer, Telegram had
+# already invalidated the query id and the answer was silently dropped -
+# no results ever showed up in the inline list.
+#
+# Fixed by:
+#   1. get_details() itself now makes a single HTTP request instead of up
+#      to 3 (services/imdb.py no longer calls out to TMDB at all).
+#   2. All per-result lookups below now run CONCURRENTLY (via
+#      asyncio.to_thread, since `requests` is blocking) instead of one at
+#      a time, each capped at PER_ITEM_TIMEOUT seconds - a single slow/
+#      hanging title can no longer stall the whole list. Whatever doesn't
+#      finish in time is simply skipped and that card falls back to
+#      defaults (🎬 Movie label, no extra caption lines) rather than
+#      blocking the response.
+# ---------------------------------------------------------------------------
+
+PER_ITEM_TIMEOUT = 4  # seconds - per-title enrichment lookup budget
+
 
 def _clean(value):
     """The IMDb API leaves unavailable fields as None - treat that the
@@ -33,10 +60,9 @@ def _clean(value):
 def _build_card_caption(label, title, year, extra):
     """Build the inline search-result card caption.
 
-    CHANGED: Previously this was just the media type + title + year
-    (e.g. "Movie\n**Iron Man 3** (2013)"). Now also shows Language and
-    Release Date when the IMDb API has them, so the first message a user sees
-    already carries more than just the name (Feature 4 fix).
+    Shows Language and Release Date when the IMDb API has them, so the
+    first message a user sees already carries more than just the name
+    (Feature 4 fix).
     """
     caption = f"{label}\n**{title}** ({year})"
 
@@ -51,17 +77,22 @@ def _build_card_caption(label, title, year, extra):
     return caption
 
 
-def _fetch_extra_info(imdb_id):
+async def _fetch_extra_info(imdb_id):
     """Best-effort lookup of Type + Release Date + Language for one search
-    result.
+    result, run off the event loop (get_details() does a blocking HTTP
+    request) and capped at PER_ITEM_TIMEOUT seconds.
 
-    Unlike OMDb's old search endpoint, the IMDb API's /search?q= results
-    don't report a movie/series type, a full release date, or a language
-    up front - all three require a separate per-title lookup. Failures
-    here just mean the type falls back to "movie" and the two extra
-    caption lines are omitted; they never block showing the result.
+    Failures/timeouts here just mean the type falls back to "movie" and
+    the two extra caption lines are omitted for that one card; they never
+    block or delay the rest of the results.
     """
-    details = get_details(imdb_id)
+    try:
+        details = await asyncio.wait_for(
+            asyncio.to_thread(get_details, imdb_id), timeout=PER_ITEM_TIMEOUT
+        )
+    except Exception:
+        return {}
+
     if not details:
         return {}
 
@@ -77,21 +108,11 @@ async def inline_search_handler(client: Client, inline_query: InlineQuery):
     """Handle inline search: user types '@<BotUsername> <title>' in any chat
     (or taps 🔍 Find Movies & Series, which pre-fills this in the current chat).
 
-    Replaces the old flow where the bot asked the user to type the title
-    directly into the chat after pressing a button. Selecting a result here
-    inserts this short card into the chat, still carrying an "ℹ️ View
-    Details" button ('sr_<imdbID>' callback_data, handled in
-    plugins/callback.py) as a fallback.
-
-    ✅ CHANGED (Feature 6): normally the user never needs that button at
-    all - the instant Telegram reports the result as chosen,
-    inline_result_chosen() below edits this same card in place into the
-    full details page (poster + full info + Trailer/Watchlist/Done), so
-    the full details show up automatically right after selecting the
-    movie/series from the inline results. The "View Details" button only
-    still matters as a fallback for the rare case Telegram inline
-    feedback isn't enabled for this bot (via @BotFather's
-    /setinlinefeedback) and the chosen-result edit never fires.
+    Selecting a result here inserts a short card into the chat, which then
+    edits itself in place into the full details page the instant Telegram
+    reports it as chosen (inline_result_chosen() below) - see Feature 6
+    notes there. The "ℹ️ View Details" button is a fallback for when
+    inline feedback isn't enabled for the bot.
     """
     query = inline_query.query.strip()
 
@@ -105,7 +126,9 @@ async def inline_search_handler(client: Client, inline_query: InlineQuery):
         )
         return
 
-    results_data = search_titles(query)
+    # search_titles() does a blocking HTTP request - run it off the event
+    # loop so the bot can keep handling other updates while it's in flight.
+    results_data = await asyncio.to_thread(search_titles, query)
 
     if not results_data:
         await inline_query.answer(
@@ -119,9 +142,15 @@ async def inline_search_handler(client: Client, inline_query: InlineQuery):
 
     results_data = results_data[:INLINE_RESULT_LIMIT]
 
+    # Fetch the Type/Language/Release-date enrichment for every result IN
+    # PARALLEL (see module note above) instead of one at a time.
+    extras = await asyncio.gather(
+        *[_fetch_extra_info(item.get("imdbID")) for item in results_data]
+    )
+
     answers = []
 
-    for item in results_data:
+    for item, extra in zip(results_data, extras):
         title = item.get("Title", "Unknown")
         year = item.get("Year", "-")
         imdb_id = item.get("imdbID")
@@ -130,13 +159,6 @@ async def inline_search_handler(client: Client, inline_query: InlineQuery):
         if not imdb_id:
             continue
 
-        # NEW: pull Type + Language + Release Date for this title so the
-        # very first card the user sees isn't just the bare title
-        # (Feature 4 fix). The IMDb search endpoint doesn't report a
-        # movie/series type up front the way OMDb's did, so this lookup
-        # now also decides the 📺/🎬 label - defaults to "movie" if it
-        # can't be determined.
-        extra = _fetch_extra_info(imdb_id)
         media_type = extra.get("type") or "movie"
 
         label = "📺 Series" if media_type == "series" else "🎬 Movie"
