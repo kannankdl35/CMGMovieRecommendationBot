@@ -1,10 +1,10 @@
 # ✅ Import series_details as well
 from services.details import movie_details, series_details
 
-# ✅ NEW: OMDb-based lookup + formatter, used by Find Movies / Watchlist /
+# ✅ NEW: IMDb API lookup + formatter, used by Find Movies / Watchlist /
 # Suggest Me (Feature 1, 2 & 3)
-from services.omdb import get_details, get_series_episode_count
-from utils.formatter import format_omdb_details
+from services.imdb import get_details, get_series_episode_count
+from utils.formatter import format_imdb_details
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 # ✅ NEW (Feature 6): used to embed a real Trailer URL button directly on
@@ -27,9 +27,9 @@ IMAGE_URL = "https://image.tmdb.org/t/p/w500"
 #
 # These are now only used as a last-resort fallback inside
 # send_suggested_details() below, for the rare case a "Suggest Me" title
-# has no IMDb ID on TMDB and the rich OMDb details page can't be built.
+# has no IMDb ID on TMDB and the rich IMDb details page can't be built.
 # Every normal details view (Find Movies & Series, Watchlist, and Suggest
-# Me) renders through send_omdb_details()/format_omdb_details() instead,
+# Me) renders through send_imdb_details()/format_imdb_details() instead,
 # so all three show identical information (Feature 2).
 # ---------------------------------------------------------------------------
 
@@ -105,7 +105,7 @@ def get_series_info(series_id):
 
 
 # ---------------------------------------------------------------------------
-# ✅ Feature 1, 2, 3 & 4 - Rich OMDb details page + Trailer / Watchlist /
+# ✅ Feature 1, 2, 3 & 4 - Rich IMDb details page + Trailer / Watchlist /
 # Done buttons. Used by "Find Movies & Series" search results, the
 # "/watchlist" listing, AND "Suggest Me" (via send_suggested_details below),
 # so all three show identical information and controls.
@@ -182,13 +182,13 @@ def build_details_keyboard(imdb_id, in_watchlist, context="search", trailer_url=
     return InlineKeyboardMarkup(rows)
 
 
-async def send_omdb_details(client, chat_id, imdb_id, user_id=None, in_watchlist=None, context="search"):
-    """Fetch full OMDb details for imdb_id and send a rich details message
+async def send_imdb_details(client, chat_id, imdb_id, user_id=None, in_watchlist=None, context="search"):
+    """Fetch full IMDb API details for imdb_id and send a rich details message
     with Poster, full info caption, and Trailer / Watchlist / Done buttons.
 
     ✅ For a series, the caption now also includes the number of Seasons
     and total Episodes (Feature 1), computed via
-    services.omdb.get_series_episode_count().
+    services.imdb.get_series_episode_count().
 
     `in_watchlist` controls which watchlist button is shown:
     - None (default): auto-detect by checking the database for `user_id`
@@ -211,7 +211,7 @@ async def send_omdb_details(client, chat_id, imdb_id, user_id=None, in_watchlist
     if details.get("Type") == "series":
         total_episodes = get_series_episode_count(imdb_id, details.get("totalSeasons"))
 
-    caption = format_omdb_details(details, total_episodes=total_episodes)
+    caption = format_imdb_details(details, total_episodes=total_episodes)
 
     poster = details.get("Poster")
     poster = poster if poster and poster != "N/A" else None
@@ -252,13 +252,13 @@ async def send_omdb_details(client, chat_id, imdb_id, user_id=None, in_watchlist
 # (an @Client.on_chosen_inline_result() handler), which fires the moment
 # Telegram inserts the chosen result into the chat.
 #
-# Unlike send_omdb_details() above, there is no chat/message object to
+# Unlike send_imdb_details() above, there is no chat/message object to
 # send into here - Telegram only gives us the inline_message_id of the
 # card it just inserted, so the existing short card is *edited in place*
 # into the full details page instead of a new message being sent.
 # ---------------------------------------------------------------------------
 
-async def send_omdb_details_inline(client, inline_message_id, imdb_id, user_id=None):
+async def send_imdb_details_inline(client, inline_message_id, imdb_id, user_id=None):
     """Edit an inline-inserted search-result card into the full details
     page (poster + full info caption + Trailer/Watchlist/Done buttons),
     in place, via its inline_message_id.
@@ -283,7 +283,7 @@ async def send_omdb_details_inline(client, inline_message_id, imdb_id, user_id=N
     if details.get("Type") == "series":
         total_episodes = get_series_episode_count(imdb_id, details.get("totalSeasons"))
 
-    caption = format_omdb_details(details, total_episodes=total_episodes)
+    caption = format_imdb_details(details, total_episodes=total_episodes)
 
     # Fetched eagerly (rather than on tap) since an inline message has no
     # chat to reply a trailer link into - see build_details_keyboard()'s
@@ -325,7 +325,7 @@ async def send_suggested_details(client, chat_id, tmdb_id, media_type, user_id=N
     recommendation list.
 
     Looks the TMDB item up first to get its IMDb ID, then delegates to
-    send_omdb_details() so "Suggest Me" renders the exact same details
+    send_imdb_details() so "Suggest Me" renders the exact same details
     page (info + Trailer / Watchlist / Done buttons) as "Find Movies &
     Series" (Feature 2 & 3).
 
@@ -347,7 +347,7 @@ async def send_suggested_details(client, chat_id, tmdb_id, media_type, user_id=N
         return
 
     if imdb_id:
-        await send_omdb_details(client, chat_id, imdb_id, user_id=user_id, context="search")
+        await send_imdb_details(client, chat_id, imdb_id, user_id=user_id, context="search")
         return
 
     # Fallback: no IMDb ID available from TMDB.
