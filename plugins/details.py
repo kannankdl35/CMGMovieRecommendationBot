@@ -1,9 +1,6 @@
-# ✅ Import series_details as well
-from services.details import movie_details, series_details
-
 # ✅ NEW: IMDb API lookup + formatter, used by Find Movies / Watchlist /
 # Suggest Me (Feature 1, 2 & 3)
-from services.imdb import get_details, get_series_episode_count
+from services.imdb import get_details, get_series_episode_count, find_imdb_id_by_title_year
 from utils.formatter import format_imdb_details
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
@@ -19,97 +16,6 @@ from services.youtube import get_trailer_url
 # the details page was opened from (Feature 2 & 3 fix).
 from database.watchlist_db import is_in_watchlist
 
-IMAGE_URL = "https://image.tmdb.org/t/p/w500"
-
-
-# ---------------------------------------------------------------------------
-# Legacy TMDB-only caption builders.
-#
-# These are now only used as a last-resort fallback inside
-# send_suggested_details() below, for the rare case a "Suggest Me" title
-# has no IMDb ID on TMDB and the rich IMDb details page can't be built.
-# Every normal details view (Find Movies & Series, Watchlist, and Suggest
-# Me) renders through send_imdb_details()/format_imdb_details() instead,
-# so all three show identical information (Feature 2).
-# ---------------------------------------------------------------------------
-
-def get_movie_caption(movie):
-    title = movie.get("title", "Unknown")
-    rating = movie.get("vote_average", "N/A")
-    release = movie.get("release_date", "-")
-    overview = movie.get("overview", "No overview available.")
-
-    genres = ", ".join(
-        genre["name"] for genre in movie.get("genres", [])
-    )
-
-    caption = (
-        f"🎬 **{title}**\n\n"
-        f"⭐ Rating : {rating}\n"
-        f"📅 Release : {release}\n"
-        f"🎭 Genres : {genres}\n\n"
-        f"📝 {overview}"
-    )
-
-    poster = movie.get("poster_path")
-    if poster:
-        poster = IMAGE_URL + poster
-
-    return poster, caption
-
-
-def get_series_caption(series):
-    """Format TV series details including number of seasons and episodes"""
-    title = series.get("name", "Unknown")
-    rating = series.get("vote_average", "N/A")
-    release = series.get("first_air_date", "-")
-    overview = series.get("overview", "No overview available.")
-
-    num_seasons = series.get("number_of_seasons", "N/A")
-    num_episodes = series.get("number_of_episodes", "N/A")
-
-    genres = ", ".join(
-        genre["name"] for genre in series.get("genres", [])
-    )
-
-    caption = (
-        f"📺 **{title}**\n\n"
-        f"⭐ Rating : {rating}\n"
-        f"📅 First Air : {release}\n"
-        f"🎭 Genres : {genres}\n"
-        f"📊 Seasons : {num_seasons}\n"
-        f"📺 Episodes : {num_episodes}\n"
-        f"\n📝 {overview}"
-    )
-
-    poster = series.get("poster_path")
-    if poster:
-        poster = IMAGE_URL + poster
-
-    return poster, caption
-
-
-def get_movie_info(movie_id):
-    movie = movie_details(movie_id)
-    if not movie:
-        return None, None
-    return get_movie_caption(movie)
-
-
-def get_series_info(series_id):
-    """Fetch and format TV series information"""
-    series = series_details(series_id)
-    if not series:
-        return None, None
-    return get_series_caption(series)
-
-
-# ---------------------------------------------------------------------------
-# ✅ Feature 1, 2, 3 & 4 - Rich IMDb details page + Trailer / Watchlist /
-# Done buttons. Used by "Find Movies & Series" search results, the
-# "/watchlist" listing, AND "Suggest Me" (via send_suggested_details below),
-# so all three show identical information and controls.
-# ---------------------------------------------------------------------------
 
 def build_details_keyboard(imdb_id, in_watchlist, context="search", trailer_url=None):
     """Build the Trailer / Watchlist (Add or Delete) / Done inline keyboard
@@ -142,11 +48,9 @@ def build_details_keyboard(imdb_id, in_watchlist, context="search", trailer_url=
         * Add/Delete Watchlist still use "addwl_"/"rmwl_", handled with an
           inline-safe branch in plugins/callback.py.
 
-    ✅ CHANGED (Feature 6): the "✅ Done" button (callback_data "done") is
-    now shown for every context, not just "search" - including details
-    pages opened from the Watchlist and from inline search results.
-    Tapping it only dismisses/clears that details message; it never
-    touches the saved watchlist entry itself.
+    The "✅ Done" button (callback_data "done") is shown for every
+    context. Tapping it only dismisses/clears that details message; it
+    never touches the saved watchlist entry itself.
 
     All of these callback_data values are handled in plugins/callback.py.
     """
@@ -317,46 +221,32 @@ async def send_imdb_details_inline(client, inline_message_id, imdb_id, user_id=N
 
 
 # ---------------------------------------------------------------------------
-# ✅ NEW: "Suggest Me" details page (Feature 2)
+# ✅ CHANGED: "Suggest Me" details page (Feature 2)
+#
+# TMDB (services/tmdb.py) is used ONLY to build/sort the "Suggest Me"
+# recommendation list itself. Once the user taps one of the suggested
+# titles, this now resolves that title on the free IMDb API (by title +
+# year, via services.imdb.find_imdb_id_by_title_year()) instead of making
+# a second TMDB lookup - so the details page it opens is sourced from
+# IMDb exactly like every other details page in the bot (Find Movies &
+# Series, Watchlist), and shows the same full set of fields.
 # ---------------------------------------------------------------------------
 
-async def send_suggested_details(client, chat_id, tmdb_id, media_type, user_id=None):
+async def send_suggested_details(client, chat_id, title, year, media_type, user_id=None):
     """Show the details page for a title picked from the "Suggest Me"
     recommendation list.
 
-    Looks the TMDB item up first to get its IMDb ID, then delegates to
-    send_imdb_details() so "Suggest Me" renders the exact same details
-    page (info + Trailer / Watchlist / Done buttons) as "Find Movies &
-    Series" (Feature 2 & 3).
-
-    Falls back to the old bare TMDB-only caption (no buttons) only in the
-    rare case TMDB doesn't have an IMDb ID on file for this title - the
-    Watchlist is keyed by IMDb ID, so Add to Watchlist isn't possible
-    without one.
+    `title`/`year` come from the cached TMDB discover result the user
+    tapped (plugins/callback.py pulls them from database.user_state's
+    saved results by TMDB id) - `media_type` is only used for the "not
+    found" error message, since get_details() below determines the real
+    Movie/Series type itself from the IMDb API.
     """
-    if media_type == "series":
-        data = series_details(tmdb_id)
-        imdb_id = (data or {}).get("external_ids", {}).get("imdb_id")
-    else:
-        data = movie_details(tmdb_id)
-        imdb_id = (data or {}).get("imdb_id")
+    imdb_id = find_imdb_id_by_title_year(title, year)
 
-    if not data:
-        error_msg = "Series not found." if media_type == "series" else "Movie not found."
-        await client.send_message(chat_id, f"❌ {error_msg}")
+    if not imdb_id:
+        label = "Series" if media_type == "series" else "Movie"
+        await client.send_message(chat_id, f"❌ Could not find details for this {label.lower()}.")
         return
 
-    if imdb_id:
-        await send_imdb_details(client, chat_id, imdb_id, user_id=user_id, context="search")
-        return
-
-    # Fallback: no IMDb ID available from TMDB.
-    if media_type == "series":
-        poster, caption = get_series_caption(data)
-    else:
-        poster, caption = get_movie_caption(data)
-
-    if poster:
-        await client.send_photo(chat_id=chat_id, photo=poster, caption=caption)
-    else:
-        await client.send_message(chat_id=chat_id, text=caption)
+    await send_imdb_details(client, chat_id, imdb_id, user_id=user_id, context="search")
