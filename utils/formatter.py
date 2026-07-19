@@ -116,27 +116,31 @@ def format_movies(results, genre=None, language=None, rating=None):
 
 
 # ---------------------------------------------------------------------------
-# ✅ NEW: OMDb-based details formatter (Feature 2 - Movie Details Page)
+# ✅ NEW: IMDb-based details formatter (Feature 2 - Movie Details Page)
 # ---------------------------------------------------------------------------
 
 def _clean(value):
-    """OMDb uses the literal string 'N/A' for missing fields.
-    Return None so callers can skip that line entirely."""
+    """The IMDb API (services/imdb.py) leaves unavailable fields as None
+    (older data sometimes used the literal string 'N/A') - treat both the
+    same so callers can skip that line entirely."""
     if not value or value == "N/A":
         return None
     return value
 
 
-def format_omdb_details(details, total_episodes=None):
-    """Build a rich caption for a movie/series using OMDb API data.
+def format_imdb_details(details, total_episodes=None):
+    """Build a rich caption for a movie/series using IMDb API data
+    (services/imdb.py's get_details()).
 
     Covers: Title, Release Year, Runtime, Genres, IMDb Rating, Vote Count,
-    Content Rating, Language, Country, Director, Writers, Cast, Plot, Awards.
+    Content Rating, Language, Country, Director, Writers, Cast, Plot, Awards -
+    any field the API didn't have for this title is simply omitted.
 
     ✅ NEW (Feature 1): For a series, also shows the number of Seasons
-    (from OMDb's "totalSeasons" field) and the total number of Episodes.
+    (from the IMDb API's "totalSeasons" field) and the total number of Episodes.
+
     `total_episodes` is computed separately via
-    services.omdb.get_series_episode_count(), since OMDb doesn't return it
+    services.imdb.get_series_episode_count(), since the IMDb API doesn't return it
     directly - pass None to omit the Episodes line (e.g. it couldn't be
     determined). This is used everywhere a title's details are shown -
     Find Movies & Series, Watchlist, and Suggest Me - so all three stay
