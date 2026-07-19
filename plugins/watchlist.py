@@ -20,8 +20,8 @@ from database.user_state import (
 # saved titles as a single numbered text message, with matching numbered
 # inline buttons underneath (keyboards/watchlist.py). Tapping a number
 # button shows that title's full details page - the exact same details
-# view used when a user searches for a movie/series (services/omdb.py +
-# utils/formatter.py via plugins/details.py's send_omdb_details), rendered
+# view used when a user searches for a movie/series (services/imdb.py +
+# utils/formatter.py via plugins/details.py's send_imdb_details), rendered
 # with a native Telegram message/photo. No Web App or external page is ever
 # opened.
 
