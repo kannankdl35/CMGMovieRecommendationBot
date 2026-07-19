@@ -31,6 +31,16 @@ import requests
 # fetching in parallel on the caller side (see plugins/inline.py), fixes
 # that.
 #
+# ✅ FIX (details page showing almost nothing): get_details() was calling
+# this API with the ID passed through the `q` (free-text search) query
+# param instead of the `tt` (direct-by-ID) param. `q=<text>` only ever
+# returns the lightweight "description" list (Title/Year/Poster/Actors) —
+# no "top"/"short" blocks come back for it. `tt=<imdb_id>` is the lookup
+# mode that returns the full "top" (runtime, genres, rating, plot,
+# language, certificate, credits, episodes, etc.) and "short" (schema.org
+# JSON-LD) blocks this file reads from below. That's why every field
+# other than Poster/Actors/Title was silently coming back None before.
+#
 # NOTE ON FIELD NAMES: the exact shape of "top"/"short" below was mapped
 # out empirically against the live API for the fields the previous version
 # of this file already used (Title/Year/Runtime/Genre/Rating/Plot/Poster/
@@ -193,6 +203,10 @@ def search_titles(query, page=1):
     Returns a list of basic result dicts: Title, Year, imdbID, Poster.
     Used for Feature 1 - Find Movies, and by find_imdb_id_by_title_year()
     below to resolve a "Suggest Me" (TMDB) title to an IMDb id.
+
+    Uses the `q` (free-text) query param - this is the one meant for
+    title searches. Do not use this for ID lookups; see get_details()
+    below for that.
     """
     if not query:
         return []
@@ -235,7 +249,37 @@ def get_details(imdb_id):
     if not imdb_id:
         return None
 
-    data = _get_json({"q": imdb_id})
+    # ---------------------------------------------------------------
+    # ✅ FIX: ID lookups must use the `tt` query parameter, not `q`.
+    #
+    # This API has two distinct lookup modes:
+    #   - `?q=<text>`  -> free-text title search (used by search_titles()
+    #                     above) - returns only the lightweight
+    #                     "description" list (Title/Year/Poster/Actors),
+    #                     with NO "top"/"short" blocks attached.
+    #   - `?tt=<id>`   -> direct-by-ID lookup - returns the full "top"
+    #                     (IMDb GraphQL-style data: runtime, genres,
+    #                     rating, plot, language, certificate, credits,
+    #                     episodes, etc.) and "short" (schema.org JSON-LD)
+    #                     blocks this function reads from below.
+    #
+    # get_details() was calling `?q=<imdb_id>` (passing e.g. "tt1375666"
+    # as a plain search string), which the API mostly treats as a text
+    # query - it can still resolve to the right title in "description",
+    # but "top"/"short" come back empty, so every field this function
+    # reads out of them (Runtime, Genre, Rating, Plot, Language, Country,
+    # Director, Writer, Awards, Seasons/Episodes) silently fell back to
+    # None and got skipped by the formatter - only the couple of fields
+    # sourced from "description" (Title/Actors/Poster) ever showed up.
+    # Switching to `tt=` fixes this without touching search_titles() or
+    # any TMDB-related code.
+    # ---------------------------------------------------------------
+    data = _get_json({"tt": imdb_id})
+    if not data:
+        # Safety net only - `tt=` should always be the one that returns
+        # the full "top"/"short" blocks; this just guards against ever
+        # regressing to "no details at all" if that ever isn't true.
+        data = _get_json({"q": imdb_id})
     if not data:
         return None
 
