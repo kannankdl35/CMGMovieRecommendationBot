@@ -7,20 +7,18 @@ API_ID = int(os.getenv("API_ID"))
 API_HASH = os.getenv("API_HASH")
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
+# ✅ CHANGED: TMDB_API_KEY now also powers "SEARCH - TMDb"
+# (services/tmdb.py) - previously it was only used for the "Suggest Me"
+# discovery lists, which have been removed.
 TMDB_API_KEY = os.getenv("TMDB_API_KEY")
 
-# ✅ CHANGED: OMDb API replaced with the key-less IMDb API
-# (https://imdb.iamidiotareyoutoo.com/docs/index.html, see
-# services/imdb.py) for movie/series search + rich details (Feature 1 & 2).
+# ✅ CHANGED: "SEARCH - IMDb" (services/imdb.py) now uses
+# https://mn-api-imdb.vercel.app/ for movie/series search + details.
 # No API key is required, so there's nothing to load from the environment
-# here anymore.
+# for it here.
 
-# ✅ NEW: YouTube Data API (used to fetch official trailers, Feature 3)
+# YouTube Data API (used to fetch official trailers)
 YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY")
 
 MONGO_URI = os.getenv("MONGO_URI")
 DATABASE_NAME = os.getenv("DATABASE_NAME", "CMGMovieRecommendationBot")
-
-# ✅ REMOVED: WEBAPP_URL - the Telegram Web App / Mini App has been removed.
-# The watchlist now renders entirely inside the Telegram chat
-# (see plugins/watchlist.py), so no public HTTPS URL is needed anymore.
