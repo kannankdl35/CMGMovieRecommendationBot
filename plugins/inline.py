@@ -11,124 +11,67 @@ from pyrogram.types import (
     ChosenInlineResult,
 )
 
-from services.imdb import search_titles, get_details
+from services.imdb import search_titles
+from services.tmdb import search_titles_tmdb
 
-# ✅ NEW (Feature 6): renders the full details page directly onto an
-# inline-inserted card the moment it's chosen - see
-# inline_result_chosen() at the bottom of this file.
 from plugins.details import send_imdb_details_inline
 
-# Feature 1 - Find Movies & Series (now via Telegram Inline Mode)
-# Telegram allows up to 50 inline results per answer; we cap it lower
-# to keep results relevant and responses fast.
+# Telegram allows up to 50 inline results per answer; capped lower to keep
+# results relevant and responses fast.
 INLINE_RESULT_LIMIT = 20
 
-# ---------------------------------------------------------------------------
-# ✅ BUGFIX: the inline query list was previously coming back empty
-# ("QUERY_ID_INVALID" in the logs). The handler was fetching Type +
-# Language + Release Date for EACH search result ONE AT A TIME
-# (`get_details()`, which used to make up to 3 blocking HTTP calls per
-# title) before ever calling `inline_query.answer()`. With up to
-# INLINE_RESULT_LIMIT results that could take well over Telegram's inline
-# query timeout, so by the time the bot tried to answer, Telegram had
-# already invalidated the query id and the answer was silently dropped -
-# no results ever showed up in the inline list.
-#
-# Fixed by:
-#   1. get_details() itself now makes a single HTTP request instead of up
-#      to 3 (services/imdb.py no longer calls out to TMDB at all).
-#   2. All per-result lookups below now run CONCURRENTLY (via
-#      asyncio.to_thread, since `requests` is blocking) instead of one at
-#      a time, each capped at PER_ITEM_TIMEOUT seconds - a single slow/
-#      hanging title can no longer stall the whole list. Whatever doesn't
-#      finish in time is simply skipped and that card falls back to
-#      defaults (🎬 Movie label, no extra caption lines) rather than
-#      blocking the response.
-# ---------------------------------------------------------------------------
 
-PER_ITEM_TIMEOUT = 4  # seconds - per-title enrichment lookup budget
-
-
-def _clean(value):
-    """The IMDb API leaves unavailable fields as None - treat that the
-    same as missing so it's skipped instead of printed."""
-    if not value or value == "N/A":
-        return None
-    return value
-
-
-def _build_card_caption(label, title, year, extra):
-    """Build the inline search-result card caption.
-
-    Shows Language and Release Date when the IMDb API has them, so the
-    first message a user sees already carries more than just the name
-    (Feature 4 fix).
+def _parse_mode(raw_query):
+    """The Home menu's two search buttons (keyboards/home.py) pre-fill
+    '@<BotUsername> imdb ' / '@<BotUsername> tmdb ' into the chat's inline
+    query box - this is the only signal this single handler gets about
+    which button was tapped, since Telegram's inline query event carries
+    just the text the user typed, not which button produced it.
+    Typing '@<BotUsername> <text>' directly, with no recognized prefix,
+    defaults to IMDb.
     """
-    caption = f"{label}\n**{title}** ({year})"
+    text = raw_query.strip()
+    lowered = text.lower()
 
-    release_date = extra.get("release_date")
-    language = extra.get("language")
+    if lowered.startswith("tmdb"):
+        return "tmdb", text[4:].strip()
+    if lowered.startswith("imdb"):
+        return "imdb", text[4:].strip()
 
-    if release_date:
-        caption += f"\n📅 Release : {release_date}"
-    if language:
-        caption += f"\n🗣 Language : {language}"
-
-    return caption
+    return "imdb", text
 
 
-async def _fetch_extra_info(imdb_id):
-    """Best-effort lookup of Type + Release Date + Language for one search
-    result, run off the event loop (get_details() does a blocking HTTP
-    request) and capped at PER_ITEM_TIMEOUT seconds.
-
-    Failures/timeouts here just mean the type falls back to "movie" and
-    the two extra caption lines are omitted for that one card; they never
-    block or delay the rest of the results.
-    """
-    try:
-        details = await asyncio.wait_for(
-            asyncio.to_thread(get_details, imdb_id), timeout=PER_ITEM_TIMEOUT
-        )
-    except Exception:
-        return {}
-
-    if not details:
-        return {}
-
-    return {
-        "type": details.get("Type"),
-        "release_date": _clean(details.get("Year")),
-        "language": _clean(details.get("Language")),
-    }
+def _build_card_caption(label, title, year, mode):
+    source = "IMDb" if mode == "imdb" else "TMDb"
+    return f"{label}\n**{title}** ({year})\n🔎 Source : {source}"
 
 
 @Client.on_inline_query()
 async def inline_search_handler(client: Client, inline_query: InlineQuery):
-    """Handle inline search: user types '@<BotUsername> <title>' in any chat
-    (or taps 🔍 Find Movies & Series, which pre-fills this in the current chat).
-
-    Selecting a result here inserts a short card into the chat, which then
-    edits itself in place into the full details page the instant Telegram
-    reports it as chosen (inline_result_chosen() below) - see Feature 6
-    notes there. The "ℹ️ View Details" button is a fallback for when
-    inline feedback isn't enabled for the bot.
+    """Handle inline search for both 'SEARCH - IMDb' and 'SEARCH - TMDb'
+    (see keyboards/home.py). Selecting a result inserts a short card into
+    the chat, which then edits itself in place into the full details page
+    the instant Telegram reports it as chosen (inline_result_chosen()
+    below) - the 'ℹ️ View Details' button is a fallback for when inline
+    feedback isn't enabled for the bot.
     """
-    query = inline_query.query.strip()
+    mode, query = _parse_mode(inline_query.query)
 
     if not query:
         await inline_query.answer(
             results=[],
             cache_time=1,
             is_personal=True,
-            switch_pm_text="Type a movie or series name to search 🔎",
+            switch_pm_text=f"Type a title to search ({mode.upper()}) 🔎",
             switch_pm_parameter="start",
         )
         return
 
-    # search_titles() does a blocking HTTP request - run it off the event
-    # loop so the bot can keep handling other updates while it's in flight.
-    results_data = await asyncio.to_thread(search_titles, query)
+    search_fn = search_titles_tmdb if mode == "tmdb" else search_titles
+
+    # Blocking HTTP request - run off the event loop so the bot can keep
+    # handling other updates while it's in flight.
+    results_data = await asyncio.to_thread(search_fn, query)
 
     if not results_data:
         await inline_query.answer(
@@ -142,38 +85,34 @@ async def inline_search_handler(client: Client, inline_query: InlineQuery):
 
     results_data = results_data[:INLINE_RESULT_LIMIT]
 
-    # Fetch the Type/Language/Release-date enrichment for every result IN
-    # PARALLEL (see module note above) instead of one at a time.
-    extras = await asyncio.gather(
-        *[_fetch_extra_info(item.get("imdbID")) for item in results_data]
-    )
-
     answers = []
 
-    for item, extra in zip(results_data, extras):
+    for item in results_data:
         title = item.get("Title", "Unknown")
         year = item.get("Year", "-")
-        imdb_id = item.get("imdbID")
+        # For IMDb mode this is a real "tt..." id. For TMDb mode this is a
+        # composite key like "tmdb_movie_603" (see services/tmdb.py) - both
+        # flow untouched through callback_data / chosen-result handling;
+        # plugins/details.py's fetch_details() is what tells them apart.
+        item_id = item.get("imdbID")
         poster = item.get("Poster")
+        media_type = item.get("Type", "movie")
 
-        if not imdb_id:
+        if not item_id:
             continue
 
-        media_type = extra.get("type") or "movie"
-
         label = "📺 Series" if media_type == "series" else "🎬 Movie"
-        description = f"{label} • {year}"
-
-        caption = _build_card_caption(label, title, year, extra)
+        description = f"{label} • {year} • {mode.upper()}"
+        caption = _build_card_caption(label, title, year, mode)
 
         buttons = InlineKeyboardMarkup(
-            [[InlineKeyboardButton("ℹ️ View Details", callback_data=f"sr_{imdb_id}")]]
+            [[InlineKeyboardButton("ℹ️ View Details", callback_data=f"sr_{item_id}")]]
         )
 
         if poster and poster != "N/A":
             answers.append(
                 InlineQueryResultPhoto(
-                    id=imdb_id,
+                    id=item_id,
                     photo_url=poster,
                     thumb_url=poster,
                     title=title,
@@ -186,7 +125,7 @@ async def inline_search_handler(client: Client, inline_query: InlineQuery):
             # Fall back to a text-only card when there's no poster
             answers.append(
                 InlineQueryResultArticle(
-                    id=imdb_id,
+                    id=item_id,
                     title=title,
                     description=description,
                     input_message_content=InputTextMessageContent(caption),
@@ -201,35 +140,31 @@ async def inline_search_handler(client: Client, inline_query: InlineQuery):
     )
 
 
-# ---------------------------------------------------------------------------
-# ✅ NEW (Feature 6): fires the instant a user taps one of the inline
-# results above. Turns that short "via @BotName" card straight into the
-# full details page (poster + full info + Trailer/Watchlist/Done buttons)
-# by editing it in place - no separate "View Details" tap required.
-#
-# IMPORTANT: this requires inline feedback to be enabled for the bot -
-# in @BotFather run /setinlinefeedback, pick this bot, and set it to
-# 100%. Without that, Telegram will not reliably report chosen results
-# and this handler won't fire (the "ℹ️ View Details" button on the card
-# stays as the fallback in that case).
-# ---------------------------------------------------------------------------
-
 @Client.on_chosen_inline_result()
 async def inline_result_chosen(client: Client, chosen: ChosenInlineResult):
-    # The result id was set to the title's imdbID when the card was built
-    # above (id=imdb_id on both InlineQueryResultPhoto and
-    # InlineQueryResultArticle).
-    imdb_id = chosen.result_id
+    """Fires the instant a user taps one of the inline results above. Turns
+    that short "via @BotName" card straight into the full details page
+    (poster + full info + Trailer/Watchlist/Done buttons) by editing it in
+    place - no separate "View Details" tap required.
+
+    IMPORTANT: this requires inline feedback to be enabled for the bot -
+    in @BotFather run /setinlinefeedback, pick this bot, and set it to
+    100%. Without that, Telegram will not reliably report chosen results
+    and this handler won't fire (the "ℹ️ View Details" button on the card
+    stays as the fallback in that case).
+    """
+    # The result id was set to the title's item_id (IMDb id or TMDb key)
+    # when the card was built above.
+    item_id = chosen.result_id
 
     # inline_message_id is only present when the bot can edit the message
     # it just caused Telegram to insert (requires inline feedback to be
-    # enabled, see note above, and reply_markup to have been attached to
-    # the chosen result - both true here). Nothing to edit otherwise.
-    if not imdb_id or not chosen.inline_message_id:
+    # enabled, see note above). Nothing to edit otherwise.
+    if not item_id or not chosen.inline_message_id:
         return
 
     user_id = chosen.from_user.id if chosen.from_user else None
 
     await send_imdb_details_inline(
-        client, chosen.inline_message_id, imdb_id, user_id=user_id
+        client, chosen.inline_message_id, item_id, user_id=user_id
     )
