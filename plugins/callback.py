@@ -2,48 +2,23 @@ from pyrogram import Client
 from pyrogram.types import CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 
 from keyboards.home import home_keyboard
-from keyboards.type import type_keyboard
-from keyboards.genre import genre_keyboard
-from keyboards.language import language_keyboard
-from keyboards.rating import rating_keyboard
-from keyboards.result import result_keyboard
 
-from database.user_state import (
-    set_state,
-    get_state,
-    clear_state,
-    get_results,
-)
-
-# Watchlist database helpers (Feature 5)
+# Watchlist database helpers
 from database.watchlist_db import add_to_watchlist, remove_from_watchlist
 
-# Feature 4 - shared watchlist text/keyboard builder + the
-# delete-then-resend helper, used by the Watchlist Home button
-# (callback_data="watchlist_open" below) and by the /watchlist command in
-# plugins/watchlist.py. Everything renders inside this Telegram chat - no
-# Web App / external page.
+# Shared watchlist text/keyboard builder + the delete-then-resend helper,
+# used by the Watchlist Home button (callback_data="watchlist_open" below)
+# and by the /watchlist command in plugins/watchlist.py. Everything renders
+# inside this Telegram chat - no Web App / external page.
 from plugins.watchlist import send_watchlist_view
 
-# IMDb API + YouTube services (Feature 1, 2 & 3)
-from services.imdb import get_details
+# YouTube service, used for the Trailer button
 from services.youtube import get_trailer_url
 
-# Shared UI helper for rendering search-result cards
-from utils.ui import send_result_cards
-
-from plugins.movie import (
-    recommendations as movie_recommendations,
-)
-
-from plugins.series import (
-    recommendations as series_recommendations,
-)
-
 from plugins.details import (
-    send_imdb_details,       # Feature 2 & 3 details renderer (Find Movies / Watchlist)
-    send_suggested_details,  # Feature 2 details renderer (Suggest Me)
-    build_details_keyboard,  # Shared Trailer/Watchlist/Done keyboard builder
+    send_imdb_details,        # details renderer (search results / watchlist)
+    fetch_details,             # resolves an IMDb id or a TMDb key to details
+    build_details_keyboard,    # shared Trailer/Watchlist/Done keyboard builder
 )
 
 
@@ -55,30 +30,17 @@ async def callback_handler(client: Client, callback: CallbackQuery):
 
     # ---------------- HOME ----------------
 
-    if data == "suggest_me":
-
-        clear_state(user_id)
-
-        await callback.message.edit_text(
-            "🎬 **Select what you're looking for**",
-            reply_markup=type_keyboard()
-        )
-
-        await callback.answer()
-        return
-
     if data == "back_home":
-
-        clear_state(user_id)
 
         await callback.message.edit_text(
             text=(
                 "👋 **Welcome to CMG Movie Recommendation Bot**\n\n"
-                "🎬 Discover Movies & TV Series based on:\n\n"
-                "• 🎭 Genre\n"
-                "• 🌍 Language\n"
-                "• ⭐ IMDb Rating\n\n"
-                "Click the button below to start."
+                "🎬 Find any Movie or TV Series and see its full details -\n"
+                "poster, rating, cast, plot, and a trailer.\n\n"
+                "• 🔍 **SEARCH - IMDb** - search powered by IMDb\n"
+                "• 🔍 **SEARCH - TMDb** - search powered by TMDb\n"
+                "• 📋 **WATCHLIST** - your saved titles\n\n"
+                "Click a button below to get started."
             ),
             reply_markup=home_keyboard()
         )
@@ -86,35 +48,34 @@ async def callback_handler(client: Client, callback: CallbackQuery):
         await callback.answer()
         return
 
-    # ---------------- FIND MOVIES (Feature 1) ----------------
-    # "Find Movies & Series" is handled entirely by Telegram Inline Mode
-    # (see keyboards/home.py + plugins/inline.py). The button doesn't send
+    # ---------------- SEARCH (SEARCH - IMDb / SEARCH - TMDb) ----------------
+    # Both search buttons are handled entirely by Telegram Inline Mode (see
+    # keyboards/home.py + plugins/inline.py). The buttons don't send
     # callback_data, so there's nothing to handle here.
 
-    # ---------------- SEARCH RESULT SELECTED (Feature 1 -> Feature 2) ----------------
-    # Fired when the user taps "View Details" on a card sent either from
-    # an inline search result (plugins/inline.py) or from search listings.
+    # ---------------- SEARCH RESULT SELECTED ----------------
+    # Fired when the user taps "View Details" on a card sent from an inline
+    # search result (plugins/inline.py). `imdb_id` here is either a real
+    # IMDb id (SEARCH - IMDb) or a TMDb key like "tmdb_movie_603"
+    # (SEARCH - TMDb) - fetch_details()/send_imdb_details() in
+    # plugins/details.py both already know how to tell those apart.
 
     if data.startswith("sr_"):
 
         imdb_id = data.replace("sr_", "", 1)
 
-        # FIX: Cards selected from an inline search (the "via @BotName"
-        # messages Telegram inserts directly, as in plugins/inline.py) are
-        # NOT sent by the bot itself, so Pyrogram gives us
-        # callback.message == None (only callback.inline_message_id is set
-        # for those). The old code unconditionally read
-        # callback.message.chat.id, which raised an AttributeError before
-        # callback.answer() ran, so tapping "View Details" on an inline
-        # result silently did nothing. Fall back to the user's own chat,
-        # which is where these inline cards are actually viewed.
+        # Cards selected from an inline search (the "via @BotName" messages
+        # Telegram inserts directly) are NOT sent by the bot itself, so
+        # Pyrogram gives us callback.message == None (only
+        # callback.inline_message_id is set for those). Fall back to the
+        # user's own chat, which is where these inline cards are actually
+        # viewed.
         chat_id = callback.message.chat.id if callback.message else callback.from_user.id
 
-        # NEW (Feature 4): Once the full details page is on its way, get
-        # rid of the search-result card that was tapped so it doesn't stay
-        # behind. A card sent directly by the bot (search flows using
-        # utils/ui.py) can simply be deleted. A card that Telegram inserted
-        # from an inline query result (plugins/inline.py) only gives us an
+        # Once the full details page is on its way, get rid of the
+        # search-result card that was tapped so it doesn't stay behind. A
+        # card sent directly by the bot can simply be deleted. A card that
+        # Telegram inserted from an inline query result only gives us an
         # inline_message_id - the Bot API has no way to delete that kind of
         # message, so the closest available cleanup is editing it to show
         # it's already been opened.
@@ -139,29 +100,28 @@ async def callback_handler(client: Client, callback: CallbackQuery):
                     pass
 
         # user_id passed so send_imdb_details auto-detects whether this
-        # title is already saved and shows the correct button (Feature 3 fix).
-        # context="search" (default) -> this is a "Find Movies & Series"
-        # details page: Delete from Watchlist toggles in place and a Done
-        # button is shown (Feature 4 & 5).
+        # title is already saved and shows the correct button.
+        # context="search" (default) -> Delete from Watchlist toggles in
+        # place and a Done button is shown.
         await send_imdb_details(client, chat_id, imdb_id, user_id=user_id)
 
         await callback.answer()
         return
 
-    # ---------------- WATCHLIST (Feature 4) ----------------
-    # CHANGED: The watchlist now works completely inside this Telegram
-    # chat - no Web App / Mini App / external page. Tapping the Watchlist
-    # Home button sends "watchlist_open", which prints the user's saved
-    # titles as a numbered text list with numbered inline buttons
-    # underneath (plugins/watchlist.py + keyboards/watchlist.py).
+    # ---------------- WATCHLIST ----------------
+    # The watchlist works completely inside this Telegram chat - no Web
+    # App / Mini App / external page. Tapping the Watchlist Home button
+    # sends "watchlist_open", which prints the user's saved titles as a
+    # numbered text list with numbered inline buttons underneath
+    # (plugins/watchlist.py + keyboards/watchlist.py).
 
     if data == "watchlist_open":
 
-        # CHANGED: Use the shared delete-then-resend helper instead of
-        # editing the Home menu message in place. This keeps the "last
-        # watchlist message" tracked consistently so later refreshes
-        # (after add/delete) always remove the right message and never
-        # leave duplicate listings stacked in the chat.
+        # Use the shared delete-then-resend helper instead of editing the
+        # Home menu message in place. This keeps the "last watchlist
+        # message" tracked consistently so later refreshes (after
+        # add/delete) always remove the right message and never leave
+        # duplicate listings stacked in the chat.
         try:
             await callback.message.delete()
         except Exception:
@@ -172,10 +132,10 @@ async def callback_handler(client: Client, callback: CallbackQuery):
         await callback.answer()
         return
 
-    # ---------------- WATCHLIST: ITEM SELECTED (Feature 4 -> Feature 2) ----------------
+    # ---------------- WATCHLIST: ITEM SELECTED ----------------
     # Fired when the user taps one of the numbered buttons under the
-    # watchlist listing above ("wl_<imdbID>") - shows that title's full
-    # details page, same as a Find Movies search result.
+    # watchlist listing above ("wl_<key_id>") - shows that title's full
+    # details page, same as a search result.
 
     if data.startswith("wl_"):
 
@@ -184,11 +144,11 @@ async def callback_handler(client: Client, callback: CallbackQuery):
         # in_watchlist=True -> shows Delete from Watchlist instead of Add
         # to Watchlist, since this title is already saved (it came from
         # the user's own watchlist listing).
-        # context="watchlist" -> keeps the ORIGINAL behavior for this
-        # entry point: tapping Delete removes the item, deletes this
-        # message, and refreshes the watchlist listing. A "✅ Done" button
-        # is also shown here (Feature 6) so the user can dismiss the
-        # details message on its own without deleting the saved item.
+        # context="watchlist" -> keeps the ORIGINAL behavior for this entry
+        # point: tapping Delete removes the item, deletes this message, and
+        # refreshes the watchlist listing. A "✅ Done" button is also shown
+        # here so the user can dismiss the details message on its own
+        # without deleting the saved item.
         await send_imdb_details(
             client, callback.message.chat.id, imdb_id,
             user_id=user_id, in_watchlist=True, context="watchlist",
@@ -197,55 +157,13 @@ async def callback_handler(client: Client, callback: CallbackQuery):
         await callback.answer()
         return
 
-    # ---------------- SUGGEST ME: ITEM SELECTED (Feature 2) ----------------
-    # Fired when the user taps a numbered button under a "Suggest Me"
-    # recommendation list ("movie_<tmdbID>", where the id is a TMDB id).
-    # Shows the exact same details page (info + Trailer / Watchlist /
-    # Done buttons) as "Find Movies & Series".
-
-    if data.startswith("movie_"):
-        item_id = data.replace("movie_", "")
-        if item_id.isdigit():
-            # Check user state to determine if series or movie
-            state = get_state(user_id)
-            media_type = "series" if state.get("type") == "series" else "movie"
-
-            # ✅ CHANGED: title/year now come from the TMDB discover
-            # results already cached for this user (saved by the
-            # "rating_" handler below via save_results()) instead of a
-            # second live TMDB /movie or /tv lookup - TMDB is only used
-            # to build/sort this list, never to source details.
-            results = get_results(user_id)
-            item = next(
-                (r for r in results if str(r.get("id")) == item_id), None
-            )
-
-            if item:
-                if media_type == "series":
-                    title = item.get("name")
-                    release_date = item.get("first_air_date")
-                else:
-                    title = item.get("title")
-                    release_date = item.get("release_date")
-                year = release_date[:4] if release_date else None
-            else:
-                title, year = None, None
-
-            await send_suggested_details(
-                client, callback.message.chat.id, title, year,
-                media_type, user_id=user_id,
-            )
-
-            await callback.answer()
-            return
-
-    # ---------------- TRAILER (Feature 3) ----------------
+    # ---------------- TRAILER ----------------
 
     if data.startswith("trailer_"):
 
         imdb_id = data.replace("trailer_", "", 1)
 
-        details = get_details(imdb_id)
+        details = fetch_details(imdb_id)
 
         if not details:
             await callback.answer("Trailer not available.", show_alert=True)
@@ -267,20 +185,20 @@ async def callback_handler(client: Client, callback: CallbackQuery):
         await callback.answer()
         return
 
-    # ---------------- ADD TO WATCHLIST (Feature 3 -> Feature 5) ----------------
-    # Fired from a "Find Movies & Series" or "Suggest Me" details page
-    # (the only places an "Add to Watchlist" button can appear - the
-    # Watchlist listing's own details page always starts already saved).
+    # ---------------- ADD TO WATCHLIST ----------------
+    # Fired from a details page opened from a search result (the only
+    # place an "Add to Watchlist" button can appear - the Watchlist
+    # listing's own details page always starts already saved).
     #
     # After adding, the button on this same details message is swapped to
     # "Delete from Watchlist" IN PLACE, keeping the Trailer and Done
-    # buttons intact (Feature 2 & 4 fix).
+    # buttons intact.
 
     if data.startswith("addwl_"):
 
         imdb_id = data.replace("addwl_", "", 1)
 
-        details = get_details(imdb_id)
+        details = fetch_details(imdb_id)
 
         if not details:
             await callback.answer("Could not add this title. Please try again.", show_alert=True)
@@ -289,9 +207,16 @@ async def callback_handler(client: Client, callback: CallbackQuery):
         poster = details.get("Poster")
         poster = poster if poster and poster != "N/A" else None
 
+        # Store under details["imdbID"] rather than the tapped key_id - for
+        # a TMDb-sourced title that resolves to a real IMDb id
+        # (services/tmdb.py's get_details_tmdb()), so titles found via
+        # either search button are saved the same way. Falls back to the
+        # original key_id when TMDb had no IMDb id on file for it.
+        storage_id = details.get("imdbID") or imdb_id
+
         added = await add_to_watchlist(
             user_id=user_id,
-            imdb_id=imdb_id,
+            imdb_id=storage_id,
             title=details.get("Title"),
             poster=poster,
             year=details.get("Year"),
@@ -299,22 +224,21 @@ async def callback_handler(client: Client, callback: CallbackQuery):
         )
 
         if callback.message:
-            # This button only ever appears on a "search"-context (Find
-            # Movies & Series / Suggest Me) details page, so rebuild with
-            # the same context: Trailer + Delete from Watchlist (toggles
-            # in place from here on) + Done.
+            # This button only ever appears on a "search"-context details
+            # page, so rebuild with the same context: Trailer + Delete from
+            # Watchlist (toggles in place from here on) + Done.
             new_markup = build_details_keyboard(imdb_id, in_watchlist=True, context="search")
             try:
                 await callback.message.edit_reply_markup(reply_markup=new_markup)
             except Exception:
                 pass
         elif callback.inline_message_id:
-            # NEW (Feature 6): details page opened directly from an inline
-            # search result (plugins/inline.py's inline_result_chosen()) -
-            # there's no chat message object here, only an
-            # inline_message_id, so the keyboard has to be rebuilt with a
-            # real Trailer URL button (context="inline") and pushed via
-            # edit_inline_reply_markup instead of edit_reply_markup.
+            # Details page opened directly from an inline search result
+            # (plugins/inline.py's inline_result_chosen()) - there's no
+            # chat message object here, only an inline_message_id, so the
+            # keyboard has to be rebuilt with a real Trailer URL button
+            # (context="inline") and pushed via edit_inline_reply_markup
+            # instead of edit_reply_markup.
             trailer_url = get_trailer_url(details.get("Title"), details.get("Year"))
             new_markup = build_details_keyboard(
                 imdb_id, in_watchlist=True, context="inline", trailer_url=trailer_url
@@ -333,19 +257,21 @@ async def callback_handler(client: Client, callback: CallbackQuery):
 
         return
 
-    # ---------------- REMOVE FROM WATCHLIST, IN PLACE (Feature 4) ----------------
-    # Fired when "Delete from Watchlist" is tapped on a "Find Movies &
-    # Series" or "Suggest Me" details page. Unlike the Watchlist listing's
-    # own Delete button below, this does NOT delete the message or open
-    # the watchlist - it removes the title from the database, shows a
-    # popup confirmation, and swaps the button back to "Add to Watchlist"
-    # on the same message.
+    # ---------------- REMOVE FROM WATCHLIST, IN PLACE ----------------
+    # Fired when "Delete from Watchlist" is tapped on a search-result
+    # details page. Unlike the Watchlist listing's own Delete button below,
+    # this does NOT delete the message or open the watchlist - it removes
+    # the title from the database, shows a popup confirmation, and swaps
+    # the button back to "Add to Watchlist" on the same message.
 
     if data.startswith("rmwl_"):
 
         imdb_id = data.replace("rmwl_", "", 1)
 
-        await remove_from_watchlist(user_id, imdb_id)
+        details = fetch_details(imdb_id)
+        storage_id = (details.get("imdbID") if details else None) or imdb_id
+
+        await remove_from_watchlist(user_id, storage_id)
 
         if callback.message:
             new_markup = build_details_keyboard(imdb_id, in_watchlist=False, context="search")
@@ -354,8 +280,6 @@ async def callback_handler(client: Client, callback: CallbackQuery):
             except Exception:
                 pass
         elif callback.inline_message_id:
-            # NEW (Feature 6): same inline-details case as "addwl_" above.
-            details = get_details(imdb_id)
             trailer_url = (
                 get_trailer_url(details.get("Title"), details.get("Year"))
                 if details else None
@@ -373,12 +297,10 @@ async def callback_handler(client: Client, callback: CallbackQuery):
         await callback.answer("Removed from Watchlist 🗑", show_alert=True)
         return
 
-    # ---------------- DONE (Feature 5 & 6) ----------------
-    # Fired when "✅ Done" is tapped on any details page - "Find Movies &
-    # Series", "Suggest Me", the Watchlist's own details page, or (NEW,
-    # Feature 6) the full-details page shown automatically after picking a
-    # title from an inline search. This only dismisses/clears that details
-    # message - it never touches the saved watchlist entry itself.
+    # ---------------- DONE ----------------
+    # Fired when "✅ Done" is tapped on any details page. This only
+    # dismisses/clears that details message - it never touches the saved
+    # watchlist entry itself.
 
     if data == "done":
 
@@ -388,10 +310,10 @@ async def callback_handler(client: Client, callback: CallbackQuery):
             except Exception:
                 pass
         elif callback.inline_message_id:
-            # NEW (Feature 6): a message inserted via inline mode can't be
-            # deleted through the Bot API - the closest available action
-            # is clearing its buttons and marking it as dismissed, same
-            # fallback already used for "sr_" above.
+            # A message inserted via inline mode can't be deleted through
+            # the Bot API - the closest available action is clearing its
+            # buttons and marking it as dismissed, same fallback already
+            # used for "sr_" above.
             try:
                 await client.edit_inline_caption(
                     callback.inline_message_id, "✅ Done.", reply_markup=None
@@ -407,12 +329,11 @@ async def callback_handler(client: Client, callback: CallbackQuery):
         await callback.answer()
         return
 
-    # ---------------- DELETE FROM WATCHLIST (Feature 4) ----------------
+    # ---------------- DELETE FROM WATCHLIST ----------------
     # Fired when the user taps "Delete from Watchlist" on a details page
     # opened from the Watchlist itself (the "wl_" handler above, the only
-    # entry point that uses context="watchlist"). Behavior is unchanged:
-    # the item is removed, this details message is deleted, and the
-    # watchlist listing is refreshed.
+    # entry point that uses context="watchlist"). The item is removed, this
+    # details message is deleted, and the watchlist listing is refreshed.
 
     if data.startswith("delwl_"):
 
@@ -422,10 +343,10 @@ async def callback_handler(client: Client, callback: CallbackQuery):
 
         chat_id = callback.message.chat.id
 
-        # CHANGED: Remove the details message entirely, then refresh the
-        # watchlist listing using the shared delete-then-resend helper so
-        # the deleted item disappears and no duplicate listing message is
-        # left behind (Feature 1 & 4 fix).
+        # Remove the details message entirely, then refresh the watchlist
+        # listing using the shared delete-then-resend helper so the
+        # deleted item disappears and no duplicate listing message is left
+        # behind.
         try:
             await callback.message.delete()
         except Exception:
@@ -434,131 +355,6 @@ async def callback_handler(client: Client, callback: CallbackQuery):
         await send_watchlist_view(client, chat_id, user_id)
 
         await callback.answer("Removed from Watchlist 🗑")
-        return
-
-    # ---------------- MOVIES ----------------
-
-    if data == "movies":
-
-        set_state(user_id, "type", "movie")
-
-        await callback.message.edit_text(
-            "🎬 **Choose a Movie Genre**",
-            reply_markup=genre_keyboard("movie")
-        )
-
-        await callback.answer()
-        return
-
-    # ---------------- SERIES ----------------
-
-    if data == "series":
-
-        set_state(user_id, "type", "series")
-
-        await callback.message.edit_text(
-            "📺 **Choose a Series Genre**",
-            reply_markup=genre_keyboard("series")
-        )
-
-        await callback.answer()
-        return
-
-    # ---------------- GENRE ----------------
-
-    if data.startswith("movie_"):
-
-        value = data.replace("movie_", "")
-
-        # Ignore movie detail callbacks
-        if not value.isdigit():
-
-            set_state(user_id, "genre", value)
-
-            await callback.message.edit_text(
-                "🌍 **Choose Language**",
-                reply_markup=language_keyboard()
-            )
-
-            await callback.answer()
-            return
-
-    if data.startswith("series_"):
-
-        value = data.replace("series_", "")
-
-        set_state(user_id, "genre", value)
-
-        await callback.message.edit_text(
-            "🌍 **Choose Language**",
-            reply_markup=language_keyboard()
-        )
-
-        await callback.answer()
-        return
-
-    # ---------------- LANGUAGE ----------------
-
-    if data.startswith("language_"):
-
-        language = data.replace("language_", "")
-
-        set_state(user_id, "language", language)
-
-        await callback.message.edit_text(
-            "⭐ **Choose Minimum IMDb Rating**",
-            reply_markup=rating_keyboard()
-        )
-
-        await callback.answer()
-        return
-    # ---------------- RATING ----------------
-
-    if data.startswith("rating_"):
-        rating_value = data.replace("rating_", "")
-        # Convert to float and add small offset to make "6+" mean "> 6" instead of ">= 6"
-        rating = float(rating_value)
-        # Add 0.01 to ensure we get strictly greater than, not equal to
-        rating = rating + 0.01 if rating > 0 else rating
-
-        set_state(user_id, "rating", rating)
-
-        # FIX: state was used below without being fetched first (NameError)
-        state = get_state(user_id)
-
-        if state.get("type") == "movie":
-            text, results = movie_recommendations(user_id)
-        else:
-            text, results = series_recommendations(user_id)
-
-        # Save results for pagination
-        from database.user_state import save_results
-
-        save_results(user_id, results)
-
-        await callback.message.edit_text(
-            text=text,
-            reply_markup=result_keyboard(results, page=1)
-        )
-
-        await callback.answer()
-        return
-
-    # ---------------- PAGINATION ----------------
-
-    # REMOVED: Entire pagination handler deleted
-    # (No need for page handling since we only show 10 items)
-
-    # ---------------- BACK ----------------
-
-    if data == "back_language":
-
-        await callback.message.edit_text(
-            "🌍 **Choose Language**",
-            reply_markup=language_keyboard()
-        )
-
-        await callback.answer()
         return
 
     # ---------------- UNKNOWN ----------------
