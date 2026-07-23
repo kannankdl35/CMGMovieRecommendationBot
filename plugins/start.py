@@ -1,6 +1,5 @@
 from pyrogram import Client, filters
 
-# ✅ Reuse the shared home keyboard instead of duplicating buttons here
 from keyboards.home import home_keyboard
 
 print("✅ START PLUGIN LOADED")
@@ -11,13 +10,16 @@ async def start_command(client, message):
 
     print("✅ /start COMMAND RECEIVED")
 
+    # ✅ CHANGED: "Suggest Me" (genre/language/rating discovery) is gone.
+    # The bot now offers exactly three options: search on IMDb, search on
+    # TMDb, or open your watchlist.
     text = (
         "👋 **Welcome to CMG Movie Recommendation Bot**\n\n"
-        "🎬 Discover Movies & TV Series based on:\n\n"
-        "• 🎭 Genre\n"
-        "• 🌍 Language\n"
-        "• ⭐ IMDb Rating\n\n"
-        "Or use 🔍 **Find Movies** to search for a specific title.\n\n"
+        "🎬 Find any Movie or TV Series and see its full details -\n"
+        "poster, rating, cast, plot, and a trailer.\n\n"
+        "• 🔍 **SEARCH - IMDb** - search powered by IMDb\n"
+        "• 🔍 **SEARCH - TMDb** - search powered by TMDb\n"
+        "• 📋 **WATCHLIST** - your saved titles\n\n"
         "Click a button below to get started."
     )
 
