@@ -3,13 +3,17 @@ import requests
 from config import TMDB_API_KEY
 
 # ---------------------------------------------------------------------------
-# ✅ CHANGED: this module used to only build/sort the old "Suggest Me"
-# discovery lists (services/discover.py, now removed). It's now the backend
-# for the "SEARCH - TMDb" button (see keyboards/home.py + plugins/inline.py),
-# doing the same job as services/imdb.py's search_titles()/get_details() but
-# sourced from TMDb instead - so "SEARCH - TMDb" follows the exact same
-# workflow as "SEARCH - IMDb" (type a title inline, tap a result, see the
-# same details page with Trailer/Watchlist/Done buttons).
+# Backend for the "SEARCH - TMDb" button (see keyboards/home.py +
+# plugins/inline.py), doing the same job as services/imdb.py's
+# search_titles()/get_details() but sourced from TMDb instead - so
+# "SEARCH - TMDb" follows the exact same workflow as "SEARCH - IMDb" (type a
+# title inline, tap a result, see the same kind of details page).
+#
+# ✅ A title found via SEARCH - TMDb is always re-opened (from the
+# Watchlist, etc.) using THIS module again, never services/imdb.py - see
+# plugins/details.py's fetch_details() and plugins/callback.py's watchlist
+# handlers, which key everything off the "tmdb_" prefix on the id itself
+# rather than trying to resolve a "real" IMDb id for it.
 # ---------------------------------------------------------------------------
 
 BASE_URL = "https://api.themoviedb.org/3"
@@ -33,11 +37,8 @@ def search_titles_tmdb(query):
     Title, Year, imdbID, Type, Poster.
 
     `imdbID` here is actually a composite TMDb key - "tmdb_movie_603" or
-    "tmdb_tv_1396" - not a real IMDb id, since getting the real IMDb id for
-    every search result would mean one extra request per row. The full
-    lookup in get_details_tmdb() below resolves the real IMDb id (when
-    TMDb has one on file) at that point instead. Everywhere else in the
-    bot just treats this key as an opaque id - see plugins/details.py's
+    "tmdb_tv_1396" - not a real IMDb id. Everywhere else in the bot just
+    treats this key as an opaque id - see plugins/details.py's
     fetch_details(), which is what actually knows a "tmdb_" prefix means
     "look this one up on TMDb instead of IMDb".
     """
@@ -83,17 +84,9 @@ def get_details_tmdb(key_id):
     """Full detail lookup for a TMDb-sourced key_id
     ("tmdb_movie_603" / "tmdb_tv_1396", built by search_titles_tmdb() above).
 
-    Fetches /movie/{id} or /tv/{id} with external_ids + credits appended in
-    a single request, so the result also carries:
-      - a real IMDb id (details["imdbID"]) whenever TMDb has one on file,
-        used as the watchlist storage key so a title found via TMDb still
-        saves the same way a title found via IMDb search would. Falls back
-        to the tmdb key_id itself on the rare title TMDb has no IMDb id
-        for - the watchlist database doesn't require the id to be a
-        "tt..." string, it's just used as an opaque key.
-      - Director/Writer/Cast, from the appended credits.
-
-    Returns None if the id can't be parsed or the lookup 404s.
+    Fetches /movie/{id} or /tv/{id} with credits appended, for
+    Director/Writer/Cast. Returns None if the id can't be parsed or the
+    lookup 404s.
     """
     try:
         _, media_type, tmdb_id = key_id.split("_", 2)
@@ -105,7 +98,7 @@ def get_details_tmdb(key_id):
     try:
         response = requests.get(
             f"{BASE_URL}/{endpoint}/{tmdb_id}",
-            params={"api_key": TMDB_API_KEY, "append_to_response": "external_ids,credits"},
+            params={"api_key": TMDB_API_KEY, "append_to_response": "credits"},
             timeout=8,
         )
         if response.status_code == 404:
@@ -139,20 +132,18 @@ def get_details_tmdb(key_id):
     )
     actors = ", ".join(c.get("name") for c in cast[:5] if c.get("name")) or None
 
-    imdb_id = (data.get("external_ids") or {}).get("imdb_id")
-
     country = ", ".join(c.get("name") for c in data.get("production_countries", [])) or None
 
     rating = data.get("vote_average")
     rating = f"{rating:.1f}" if isinstance(rating, (int, float)) and rating else None
 
     details = {
-        "imdbID": imdb_id or key_id,
+        "imdbID": key_id,
         "Title": title,
         "Year": year or "N/A",
         "Poster": _poster_url(data.get("poster_path")) or "N/A",
         "Plot": _clean(data.get("overview")) or "N/A",
-        "imdbRating": rating or "N/A",
+        "imdbRating": rating or "N/A",  # shown as "TMDb Rating" - see utils/formatter.py
         "Director": director or "N/A",
         "Writer": writer or "N/A",
         "Actors": actors or "N/A",
@@ -165,9 +156,10 @@ def get_details_tmdb(key_id):
         "Language": (data.get("original_language") or "N/A").upper(),
         "Country": country or "N/A",
         "Awards": "N/A",
-        # Private field, read directly by plugins/details.py instead of
-        # going through services.imdb.get_series_episode_count() (which
-        # doesn't apply to TMDb-sourced titles) - TMDb gives this for free.
+        "Source": "tmdb",
+        # Read directly by plugins/details.py instead of going through
+        # services.imdb.get_series_episode_count() (which doesn't apply to
+        # TMDb-sourced titles) - TMDb gives this for free.
         "_total_episodes": data.get("number_of_episodes"),
     }
 
