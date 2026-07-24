@@ -3,27 +3,25 @@ from pyrogram import Client, filters
 from database.watchlist_db import get_watchlist
 from keyboards.watchlist import watchlist_keyboard
 
-# ✅ NEW: tracks the last watchlist listing message per user so it can be
+# ✅ Tracks the last watchlist listing message per user so it can be
 # deleted before a new one is sent, avoiding duplicate stacked messages
-# whenever the watchlist is refreshed (Feature 4 fix).
+# whenever the watchlist is refreshed.
 from database.user_state import (
     set_last_watchlist_message,
     get_last_watchlist_message,
 )
 
-# ✅ CHANGED: Feature 4 - User Watchlist now works completely INSIDE the
-# Telegram chat. The old Telegram Mini App / Web App (webapp/,
-# webapp_server.py, utils/webapp_auth.py) has been removed entirely.
+# The User Watchlist works completely INSIDE the Telegram chat - no Web
+# App / Mini App page involved.
 #
-# Tapping "📋 Watchlist" on the Home menu (callback_data="watchlist_open",
+# Tapping "📋 WATCHLIST" on the Home menu (callback_data="watchlist_open",
 # handled in plugins/callback.py) or sending /watchlist prints the user's
 # saved titles as a single numbered text message, with matching numbered
 # inline buttons underneath (keyboards/watchlist.py). Tapping a number
 # button shows that title's full details page - the exact same details
-# view used when a user searches for a movie/series (services/imdb.py +
-# utils/formatter.py via plugins/details.py's send_imdb_details), rendered
-# with a native Telegram message/photo. No Web App or external page is ever
-# opened.
+# view used for a search result (plugins/details.py's send_imdb_details),
+# rendered with a native Telegram message/photo. No Web App or external
+# page is ever opened.
 
 WATCHLIST_DISPLAY_LIMIT = 30  # keeps the text + button grid well within Telegram's limits
 
@@ -34,7 +32,7 @@ def build_watchlist_text(docs):
     if not docs:
         return (
             "📭 Your watchlist is empty.\n\n"
-            "Use 🔍 **Find Movies & Series** to search for a title, then tap "
+            "Use 🔍 **SEARCH - IMDb** or 🔍 **SEARCH - TMDb** to find a title, then tap "
             "❤️ **Add to Watchlist** on its details page to save it here."
         )
 
@@ -72,10 +70,10 @@ async def send_watchlist_view(client, chat_id, user_id):
     """Delete the user's previous watchlist listing message (if any) and
     send a fresh one, remembering its message_id for next time.
 
-    ✅ NEW: Fixes duplicate watchlist messages piling up in the chat -
-    every time the watchlist changes (an item is deleted, or /watchlist is
-    run again) the old listing message is removed first instead of a new
-    one being appended underneath it (Feature 4 fix).
+    Fixes duplicate watchlist messages piling up in the chat - every time
+    the watchlist changes (an item is deleted, or /watchlist is run again)
+    the old listing message is removed first instead of a new one being
+    appended underneath it.
     """
     text, keyboard = await get_watchlist_view(user_id)
 
@@ -99,8 +97,8 @@ async def watchlist_command(client, message):
     """Entry point for /watchlist - lists saved titles as numbered text with
     numbered inline buttons underneath, fully inside the Telegram chat.
 
-    ✅ CHANGED: Deletes the previous watchlist listing message (if the user
-    already had one open) before sending the refreshed one, so re-running
+    Deletes the previous watchlist listing message (if the user already
+    had one open) before sending the refreshed one, so re-running
     /watchlist never leaves duplicate listings stacked in the chat.
     """
     user_id = message.from_user.id
