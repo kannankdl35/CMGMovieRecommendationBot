@@ -1,16 +1,20 @@
+import time
+
 import requests
 
 # ---------------------------------------------------------------------------
-# ✅ CHANGED: switched from the old key-less IMDb API to
-# https://mn-api-imdb.vercel.app/ (single endpoint, two modes):
+# Switched from the old key-less IMDb API to https://mn-api-imdb.vercel.app/
+# (single endpoint, two modes):
 #   - Text search:  GET /api/search?q=<query>   -> {"Search": [...]}
 #   - By IMDb id:   GET /api/search?id=<tt...>   -> flat details object
 #
-# ⚠️ IMPORTANT RELIABILITY NOTE (found via live testing before writing this):
+# ⚠️ IMPORTANT RELIABILITY NOTE (found via live testing):
 #   The by-id endpoint is reliable for movies, but for TV series it has been
 #   observed to either:
 #     a) return the right Title but leave Year/Poster/Director/Writer/
-#        Stars/Genres/Runtime all "N/A" (e.g. Game of Thrones, tt0944947), or
+#        Stars/Genres/Runtime all "N/A" (e.g. Game of Thrones, tt0944947) -
+#        this is a genuine data gap on the API's side, nothing to retry -
+#        that's simply all the detail it has for that title, or
 #     b) return a COMPLETELY UNRELATED title for a valid, correctly
 #        formatted id (requesting tt0903747 - Breaking Bad - returned the
 #        1975 film "Mirror" instead, with an unrelated poster/plot/rating
@@ -18,25 +22,25 @@ import requests
 #   An invalid/unknown id doesn't error either - it comes back as a "Title":
 #   "IMDb <id>" object with every other field "N/A".
 #
-#   To avoid ever showing a user details for the wrong movie/show, this
-#   module keeps a small in-memory cache of the Title/Year/Poster/Type
-#   already confirmed correct by search_titles() (which has been reliable
-#   in testing), and get_details() below:
-#     - always prefers that cached Title/Year/Poster/Type over whatever the
-#       by-id lookup returns, when known
-#     - only keeps the EXTRA fields the by-id lookup adds (Plot, rating,
-#       cast, etc.) if the title it returned actually looks like the title
-#       we already know - otherwise those are dropped rather than shown
-#       attached to the wrong title.
-#   The cache is only populated during this process's lifetime (a bot
-#   restart clears it) - if a bare id shows up with nothing cached for it
-#   (e.g. an old watchlist entry after a restart), this falls back to
-#   trusting the API's own Title for that one lookup.
+#   ✅ UPDATE: case (b) turned out to be intermittent rather than a fixed,
+#   permanent mismatch for that id - retrying the same request sometimes
+#   gets the correct title back. get_details() below now retries the by-id
+#   lookup a few times specifically when the title doesn't match what's
+#   already confirmed correct (via search_titles()'s cache) and uses the
+#   first attempt that matches. If every attempt still comes back wrong,
+#   it falls back to showing only the Title/Year/Poster we already trust
+#   (from the cache) and drops the mismatched extra fields (Plot, rating,
+#   cast, etc.) rather than showing details for the wrong title - case (a)
+#   above is a genuine data gap on the API's side and isn't something a
+#   retry can fix.
 # ---------------------------------------------------------------------------
 
 BASE_URL = "https://mn-api-imdb.vercel.app/api/search"
 
 _title_cache = {}  # imdb_id -> {"Title": ..., "Year": ..., "Poster": ..., "Type": ...}
+
+BY_ID_RETRY_ATTEMPTS = 3
+BY_ID_RETRY_DELAY_SECONDS = 0.5
 
 
 def _clean(value):
@@ -49,7 +53,8 @@ def _clean(value):
 def _looks_related(known_title, returned_title):
     """Loose sanity check: does the by-id lookup's Title look like the
     title we already know for this id? Used to decide whether to trust the
-    extra fields (Plot, rating, cast, ...) that came with it.
+    extra fields (Plot, rating, cast, ...) that came with it, and whether
+    to retry the lookup (see get_details() below).
     """
     known_title = _clean(known_title)
     returned_title = _clean(returned_title)
@@ -142,7 +147,7 @@ def search_titles(query):
     return results
 
 
-def _fetch_by_id(imdb_id):
+def _fetch_by_id_once(imdb_id):
     try:
         response = requests.get(BASE_URL, params={"id": imdb_id}, timeout=8)
         response.raise_for_status()
@@ -155,15 +160,31 @@ def get_details(imdb_id):
     """Full detail lookup - GET /api/search?id=<imdb_id>.
 
     See the reliability note at the top of this file for why the raw
-    response isn't trusted blindly. Returns None if the id can't be
-    resolved to anything at all (matches the old API's "not found" shape).
+    response isn't trusted blindly, and why it's retried a few times when
+    the title doesn't match what's already confirmed correct.
+    Returns None if the id can't be resolved to anything at all (matches
+    the old API's "not found" shape).
     """
-    raw = _fetch_by_id(imdb_id)
+    cached = _title_cache.get(imdb_id, {})
+    known_title = cached.get("Title")
+
+    raw = None
+    for attempt in range(BY_ID_RETRY_ATTEMPTS):
+        candidate = _fetch_by_id_once(imdb_id)
+
+        if candidate is None:
+            break
+
+        raw = candidate  # keep the latest response as the fallback
+
+        if _looks_related(known_title, _clean(candidate.get("Title"))):
+            break  # good match - stop retrying
+
+        if attempt < BY_ID_RETRY_ATTEMPTS - 1:
+            time.sleep(BY_ID_RETRY_DELAY_SECONDS)
 
     if not raw:
         return None
-
-    cached = _title_cache.get(imdb_id, {})
 
     raw_title = _clean(raw.get("Title"))
     raw_year = _clean(raw.get("Year"))
@@ -176,7 +197,6 @@ def get_details(imdb_id):
     if not any([raw_year, raw_poster, raw_plot, raw_rating]) and not cached:
         return None
 
-    known_title = cached.get("Title")
     title_reliable = _looks_related(known_title, raw_title)
 
     details = {
@@ -185,6 +205,7 @@ def get_details(imdb_id):
         "Year": cached.get("Year") or raw_year or "N/A",
         "Poster": cached.get("Poster") or raw_poster or "N/A",
         "Type": cached.get("Type") or "movie",
+        "Source": "imdb",
     }
 
     if title_reliable:
@@ -196,8 +217,8 @@ def get_details(imdb_id):
         details["Genre"] = _clean(raw.get("Genres")) or "N/A"
         details["Runtime"] = _clean(raw.get("Runtime")) or "N/A"
     else:
-        # The by-id lookup's extra fields belong to a different title than
-        # the one we know this id actually is - don't show them.
+        # Every retry still came back with a different title than the one
+        # we know this id actually is - don't show its extra fields.
         details["Plot"] = "N/A"
         details["imdbRating"] = "N/A"
         details["Director"] = "N/A"
