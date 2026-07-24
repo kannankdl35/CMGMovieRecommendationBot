@@ -1,3 +1,5 @@
+import asyncio
+
 # IMDb + TMDb detail lookup & formatter, used by both search flows
 # (SEARCH - IMDb / SEARCH - TMDb) and by the Watchlist.
 from services.imdb import get_details, get_series_episode_count
@@ -5,17 +7,16 @@ from services.tmdb import get_details_tmdb
 from utils.formatter import format_imdb_details
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
-# Used to embed a real Trailer URL button directly on details pages opened
-# from an inline search result - those messages have no chat/message object
-# to reply into (only an inline_message_id), so the lazy "tap Trailer to
-# fetch it" callback used elsewhere doesn't work there; the trailer link has
-# to be fetched up front and attached as a URL button.
-from services.youtube import get_trailer_url
-
 # Used to auto-detect whether a title is already saved, so the correct
 # watchlist button (Add vs Delete) is shown regardless of where the details
 # page was opened from.
 from database.watchlist_db import is_in_watchlist
+
+
+def _source_mode(key_id):
+    """"tmdb" for a TMDb-sourced key ("tmdb_movie_603" / "tmdb_tv_1396"),
+    "imdb" for a real IMDb id ("tt1234567") - see services/tmdb.py."""
+    return "tmdb" if key_id and key_id.startswith("tmdb_") else "imdb"
 
 
 def fetch_details(key_id):
@@ -24,11 +25,13 @@ def fetch_details(key_id):
     "tmdb_tv_1396", from the SEARCH - TMDb flow - see services/tmdb.py).
 
     This is the single place that decides which backend to call - every
-    other part of the bot (watchlist, trailer, add/remove buttons,
+    other part of the bot (watchlist, add/remove buttons,
     plugins/callback.py, plugins/inline.py) just passes whichever key_id it
-    was originally given straight through to this function.
+    was originally given straight through to this function. This makes a
+    blocking HTTP request - call it via asyncio.to_thread() from async code
+    (see send_imdb_details() below) rather than awaiting it directly.
     """
-    if key_id and key_id.startswith("tmdb_"):
+    if _source_mode(key_id) == "tmdb":
         return get_details_tmdb(key_id)
     return get_details(key_id)
 
@@ -37,7 +40,7 @@ def _total_episodes(key_id, details):
     if details.get("Type") != "series":
         return None
 
-    if key_id.startswith("tmdb_"):
+    if _source_mode(key_id) == "tmdb":
         # TMDb gives this directly - see services/tmdb.py's get_details_tmdb().
         return details.get("_total_episodes")
 
@@ -47,14 +50,15 @@ def _total_episodes(key_id, details):
     return get_series_episode_count(key_id, details.get("totalSeasons"))
 
 
-def build_details_keyboard(key_id, in_watchlist, context="search", trailer_url=None):
-    """Build the Trailer / Watchlist (Add or Delete) / Done inline keyboard
-    shown under a details page.
+def build_details_keyboard(key_id, in_watchlist, context="search"):
+    """Build the Watchlist (Add or Delete) / Search Another / Done inline
+    keyboard shown under a details page.
 
-    `context` controls how the Watchlist button behaves once tapped, and
-    which details page this keyboard belongs to:
+    `context` controls how the Watchlist button behaves once tapped:
 
-    - "search" (default): used for SEARCH - IMDb / SEARCH - TMDb results.
+    - "search" (default): used for SEARCH - IMDb / SEARCH - TMDb results
+      (including the details page shown right after picking an inline
+      result - see plugins/inline.py's inline_result_chosen()).
         * Add to Watchlist  -> callback_data "addwl_<key_id>"
         * Delete from Watchlist -> callback_data "rmwl_<key_id>": removes
           the item from the database, shows a popup confirmation, and
@@ -65,16 +69,12 @@ def build_details_keyboard(key_id, in_watchlist, context="search", trailer_url=N
         * Delete from Watchlist -> callback_data "delwl_<key_id>":
           removes the item, deletes this details message, and refreshes
           the watchlist listing.
-    - "inline": used for the full details page shown automatically right
-      after a title is picked from an inline search result (see
-      plugins/inline.py's inline_result_chosen()). These messages only have
-      an inline_message_id (no chat/message object), so:
-        * the Trailer button is a plain URL button built from
-          `trailer_url` (fetched up front by the caller) instead of a
-          lazy callback_data lookup - it's simply omitted if no trailer
-          was found.
-        * Add/Delete Watchlist still use "addwl_"/"rmwl_", handled with an
-          inline-safe branch in plugins/callback.py.
+
+    "🔎 Search Another Movie/Series" pre-fills "imdb "/"tmdb " into the
+    chat's inline query box (same mechanic as the Home menu's two search
+    buttons, see keyboards/home.py) - always for the SAME source this
+    title came from, based on whether key_id has a "tmdb_" prefix, so
+    tapping it continues searching on the same site as the last result.
 
     The "✅ Done" button (callback_data "done") is shown for every context.
     Tapping it only dismisses/clears that details message; it never
@@ -96,27 +96,26 @@ def build_details_keyboard(key_id, in_watchlist, context="search", trailer_url=N
             "❤️ Add to Watchlist", callback_data=f"addwl_{key_id}"
         )
 
-    rows = []
+    mode = _source_mode(key_id)
 
-    if context == "inline":
-        if trailer_url:
-            rows.append([InlineKeyboardButton("🎬 Trailer", url=trailer_url)])
-        # No trailer found for this title - simply omit the row rather
-        # than showing a button that can't do anything.
-    else:
-        rows.append(
-            [InlineKeyboardButton("🎬 Trailer", callback_data=f"trailer_{key_id}")]
-        )
-
-    rows.append([watchlist_button])
-    rows.append([InlineKeyboardButton("✅ Done", callback_data="done")])
+    rows = [
+        [watchlist_button],
+        [
+            InlineKeyboardButton(
+                "🔎 Search Another Movie/Series",
+                switch_inline_query_current_chat=f"{mode} ",
+            )
+        ],
+        [InlineKeyboardButton("✅ Done", callback_data="done")],
+    ]
 
     return InlineKeyboardMarkup(rows)
 
 
 async def send_imdb_details(client, chat_id, key_id, user_id=None, in_watchlist=None, context="search"):
     """Fetch full details for key_id and send a rich details message with
-    Poster, full info caption, and Trailer / Watchlist / Done buttons.
+    Poster, full info caption, and Watchlist / Search Another / Done
+    buttons.
 
     `in_watchlist` controls which watchlist button is shown:
     - None (default): auto-detect by checking the database for `user_id`
@@ -128,7 +127,7 @@ async def send_imdb_details(client, chat_id, key_id, user_id=None, in_watchlist=
     `context` is passed straight through to build_details_keyboard() - see
     that function for what "search" vs "watchlist" changes.
     """
-    details = fetch_details(key_id)
+    details = await asyncio.to_thread(fetch_details, key_id)
 
     if not details:
         await client.send_message(chat_id, "❌ Could not find details for this title.")
@@ -172,11 +171,12 @@ async def send_imdb_details(client, chat_id, key_id, user_id=None, in_watchlist=
 
 async def send_imdb_details_inline(client, inline_message_id, key_id, user_id=None):
     """Edit an inline-inserted search-result card into the full details
-    page (poster + full info caption + Trailer/Watchlist/Done buttons),
-    in place, via its inline_message_id. Called from plugins/inline.py's
-    inline_result_chosen() for both SEARCH - IMDb and SEARCH - TMDb results.
+    page (poster + full info caption + Watchlist/Search Another/Done
+    buttons), in place, via its inline_message_id. Called from
+    plugins/inline.py's inline_result_chosen() for both SEARCH - IMDb and
+    SEARCH - TMDb results.
     """
-    details = fetch_details(key_id)
+    details = await asyncio.to_thread(fetch_details, key_id)
 
     if not details:
         try:
@@ -196,16 +196,9 @@ async def send_imdb_details_inline(client, inline_message_id, key_id, user_id=No
 
     caption = format_imdb_details(details, total_episodes=total_episodes)
 
-    # Fetched eagerly (rather than on tap) since an inline message has no
-    # chat to reply a trailer link into - see build_details_keyboard()'s
-    # "inline" context above.
-    trailer_url = get_trailer_url(details.get("Title"), details.get("Year"))
-
     in_watchlist = await is_in_watchlist(user_id, key_id) if user_id else False
 
-    buttons = build_details_keyboard(
-        key_id, in_watchlist, context="inline", trailer_url=trailer_url
-    )
+    buttons = build_details_keyboard(key_id, in_watchlist, context="search")
 
     poster = details.get("Poster")
     poster = poster if poster and poster != "N/A" else None
