@@ -10,13 +10,10 @@ async def start_command(client, message):
 
     print("✅ /start COMMAND RECEIVED")
 
-    # ✅ CHANGED: "Suggest Me" (genre/language/rating discovery) is gone.
-    # The bot now offers exactly three options: search on IMDb, search on
-    # TMDb, or open your watchlist.
     text = (
         "👋 **Welcome to CMG Movie Recommendation Bot**\n\n"
         "🎬 Find any Movie or TV Series and see its full details -\n"
-        "poster, rating, cast, plot, and a trailer.\n\n"
+        "poster, rating, cast, and plot.\n\n"
         "• 🔍 **SEARCH - IMDb** - search powered by IMDb\n"
         "• 🔍 **SEARCH - TMDb** - search powered by TMDb\n"
         "• 📋 **WATCHLIST** - your saved titles\n\n"
