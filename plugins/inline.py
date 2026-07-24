@@ -74,11 +74,14 @@ async def inline_search_handler(client: Client, inline_query: InlineQuery):
     results_data = await asyncio.to_thread(search_fn, query)
 
     if not results_data:
+        # ✅ Simple, unambiguous message when nothing matches - shown as
+        # the inline "switch to PM" suggestion, since Telegram inline
+        # queries have no other way to show a plain empty-state message.
         await inline_query.answer(
             results=[],
-            cache_time=5,
+            cache_time=1,
             is_personal=True,
-            switch_pm_text=f"No results found for '{query}'",
+            switch_pm_text="No Results Found ❌",
             switch_pm_parameter="start",
         )
         return
@@ -144,8 +147,8 @@ async def inline_search_handler(client: Client, inline_query: InlineQuery):
 async def inline_result_chosen(client: Client, chosen: ChosenInlineResult):
     """Fires the instant a user taps one of the inline results above. Turns
     that short "via @BotName" card straight into the full details page
-    (poster + full info + Trailer/Watchlist/Done buttons) by editing it in
-    place - no separate "View Details" tap required.
+    (poster + full info + Watchlist/Search Another/Done buttons) by editing
+    it in place - no separate "View Details" tap required.
 
     IMPORTANT: this requires inline feedback to be enabled for the bot -
     in @BotFather run /setinlinefeedback, pick this bot, and set it to
