@@ -164,3 +164,140 @@ def get_details_tmdb(key_id):
     }
 
     return details
+
+
+# ---------------------------------------------------------------------------
+# 🔥 Trending Now (see keyboards/trending.py + plugins/callback.py)
+# ---------------------------------------------------------------------------
+
+
+def get_trending_tmdb(period="day"):
+    """Fetch TMDb's trending titles for `period` ("day" or "week"),
+    covering both movies and TV series in a single call
+    (/trending/all/{period}).
+
+    Normalized to the same shape as search_titles_tmdb(): Title, Year,
+    imdbID (a "tmdb_movie_<id>"/"tmdb_tv_<id>" key, same convention as the
+    rest of this module), Type, Poster.
+
+    Returns up to 10 items (movie/tv only - "person" rows that can appear
+    in /trending/all/* are skipped, same as search_titles_tmdb()).
+
+    Returns None on any request failure (network error, bad API key,
+    non-2xx response) so callers can tell "API failed" apart from "API
+    succeeded but there's nothing trending" (an empty list).
+    """
+    try:
+        response = requests.get(
+            f"{BASE_URL}/trending/all/{period}",
+            params={"api_key": TMDB_API_KEY},
+            timeout=8,
+        )
+        response.raise_for_status()
+        data = response.json()
+    except Exception:
+        return None
+
+    results = []
+
+    for item in data.get("results", []):
+        media_type = item.get("media_type")
+
+        if media_type not in ("movie", "tv"):
+            continue  # skip "person" rows mixed into /trending/all/*
+
+        title = item.get("title") or item.get("name") or "Unknown"
+        date = item.get("release_date") or item.get("first_air_date") or ""
+        year = date[:4] if date else "N/A"
+        poster = _poster_url(item.get("poster_path"))
+        key_id = f"tmdb_{media_type}_{item.get('id')}"
+
+        results.append(
+            {
+                "Title": title,
+                "Year": year,
+                "imdbID": key_id,
+                "Type": "series" if media_type == "tv" else "movie",
+                "Poster": poster,
+            }
+        )
+
+        if len(results) == 10:
+            break
+
+    return results
+
+
+def _provider_names(region_block, keys):
+    """Collect de-duplicated provider names for the given watch-provider
+    keys ("flatrate", "free", "ads", "rent", "buy") from one region's
+    entry in a /watch/providers response."""
+    names = []
+
+    for key in keys:
+        for provider in (region_block or {}).get(key, []) or []:
+            name = provider.get("provider_name")
+            if name and name not in names:
+                names.append(name)
+
+    return names
+
+
+def get_ott_status_tmdb(media_type, tmdb_id, region="US"):
+    """Determine OTT/streaming release status for a title via TMDb's
+    /movie/{id}/watch/providers or /tv/{id}/watch/providers endpoint.
+
+    Preference order:
+      1. Subscription streaming ("flatrate"/"free"/"ads") in `region`
+         -> "✅ Streaming on: Netflix, Prime Video (US)"
+      2. Rent/buy only in `region`
+         -> "🛒 Available to rent/buy on: ... (US)"
+      3. No data for `region` but present in some other region
+         -> "🌍 Available on OTT in select regions."
+      4. No watch-provider data anywhere
+         -> "Not available on OTT yet."
+
+    Never raises - any request failure returns a friendly fallback string
+    so a details page can always be shown even if this lookup fails.
+    """
+    endpoint = "tv" if media_type == "tv" else "movie"
+
+    try:
+        response = requests.get(
+            f"{BASE_URL}/{endpoint}/{tmdb_id}/watch/providers",
+            params={"api_key": TMDB_API_KEY},
+            timeout=8,
+        )
+        response.raise_for_status()
+        data = response.json()
+    except Exception:
+        return "⚠️ Could not check OTT availability right now."
+
+    all_regions = data.get("results") or {}
+    region_data = all_regions.get(region)
+
+    if region_data:
+        streaming = _provider_names(region_data, ("flatrate", "free", "ads"))
+        if streaming:
+            return f"✅ Streaming on: {', '.join(streaming)} ({region})"
+
+        rent_buy = _provider_names(region_data, ("rent", "buy"))
+        if rent_buy:
+            return f"🛒 Available to rent/buy on: {', '.join(rent_buy)} ({region})"
+
+    if all_regions:
+        return "🌍 Available on OTT in select regions."
+
+    return "Not available on OTT yet."
+
+
+def get_ott_status_from_key(key_id):
+    """Same as get_ott_status_tmdb(), but takes a "tmdb_movie_<id>" /
+    "tmdb_tv_<id>" key (as produced by get_trending_tmdb() /
+    search_titles_tmdb()) instead of separate media_type/tmdb_id args."""
+    try:
+        _, media_type, tmdb_id = key_id.split("_", 2)
+    except ValueError:
+        return "Not available on OTT yet."
+
+    return get_ott_status_tmdb(media_type, tmdb_id)
