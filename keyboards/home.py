@@ -2,12 +2,12 @@ from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 
 def home_keyboard():
-    """✅ CHANGED: "Suggest Me" is gone. The Home menu now has exactly three
-    buttons:
+    """The Home menu has four buttons:
 
       1. 🔍 SEARCH - IMDb
       2. 🔍 SEARCH - TMDb
-      3. 📋 WATCHLIST
+      3. 🔥 TRENDING NOW
+      4. 📋 WATCHLIST
 
     Both search buttons use Telegram Inline Mode, same as the old
     "Find Movies & Series" button - switch_inline_query_current_chat
@@ -16,6 +16,10 @@ def home_keyboard():
     plugins/inline.py's single inline-query handler tells which backend to
     search (services.imdb vs services.tmdb) - Telegram doesn't otherwise
     report which button was tapped, only the text the user ends up typing.
+
+    ✅ NEW: "🔥 Trending Now" (callback_data="trending_open") - opens the
+    Today / This Week / Home selection page (keyboards/trending.py),
+    powered by TMDb's trending endpoints. Handled in plugins/callback.py.
     """
     return InlineKeyboardMarkup(
         [
@@ -29,6 +33,12 @@ def home_keyboard():
                 InlineKeyboardButton(
                     "🔍 SEARCH - TMDb",
                     switch_inline_query_current_chat="tmdb "
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "🔥 Trending Now",
+                    callback_data="trending_open"
                 )
             ],
             [
