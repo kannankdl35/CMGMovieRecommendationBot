@@ -5,6 +5,16 @@ from pyrogram.types import CallbackQuery
 
 from keyboards.home import home_keyboard
 
+# 🔥 Trending Now keyboards (Today/This Week/Home selection page + the
+# numbered listing keyboard), and the TMDb trending fetcher.
+from keyboards.trending import trending_menu_keyboard, trending_list_keyboard
+from services.tmdb import get_trending_tmdb
+
+# Per-user in-memory storage of the last trending listing fetched, so the
+# numbered buttons under it can be mapped back to a title (see
+# database/user_state.py).
+from database.user_state import save_trending_results, get_trending_results
+
 # Watchlist database helpers
 from database.watchlist_db import add_to_watchlist, remove_from_watchlist
 
@@ -16,6 +26,7 @@ from plugins.watchlist import send_watchlist_view
 
 from plugins.details import (
     send_imdb_details,        # details renderer (search results / watchlist)
+    send_trending_details,     # details renderer for 🔥 Trending Now (adds OTT status)
     fetch_details,             # resolves an IMDb id or a TMDb key to details
     build_details_keyboard,    # shared Watchlist/Search Another/Done keyboard builder
 )
@@ -38,10 +49,135 @@ async def callback_handler(client: Client, callback: CallbackQuery):
                 "poster, rating, cast, and plot.\n\n"
                 "• 🔍 **SEARCH - IMDb** - search powered by IMDb\n"
                 "• 🔍 **SEARCH - TMDb** - search powered by TMDb\n"
+                "• 🔥 **TRENDING NOW** - what's trending today/this week on TMDb\n"
                 "• 📋 **WATCHLIST** - your saved titles\n\n"
                 "Click a button below to get started."
             ),
             reply_markup=home_keyboard()
+        )
+
+        await callback.answer()
+        return
+
+    # ---------------- 🔥 TRENDING NOW: MENU ----------------
+    # Fired from the main menu's "🔥 Trending Now" button
+    # (callback_data="trending_open", see keyboards/home.py). Shows the
+    # Today / This Week / Home selection page (keyboards/trending.py),
+    # edited in place over the main menu message.
+
+    if data == "trending_open":
+
+        await callback.message.edit_text(
+            text=(
+                "🔥 **Trending Now**\n\n"
+                "See what's trending on TMDb right now.\n\n"
+                "• 📅 **Today** - trending today\n"
+                "• 📈 **This Week** - trending this week\n\n"
+                "Pick one below 👇"
+            ),
+            reply_markup=trending_menu_keyboard()
+        )
+
+        await callback.answer()
+        return
+
+    # ---------------- 🔥 TRENDING NOW: TODAY / THIS WEEK ----------------
+    # Fetches TMDb's daily/weekly trending titles, stores them for this
+    # user (so the numbered buttons below can be mapped back to a title -
+    # database/user_state.py), and shows them as a numbered list with
+    # numbered buttons underneath (keyboards/trending.py's
+    # trending_list_keyboard()), 5 per row.
+
+    if data in ("trending_day", "trending_week"):
+
+        period = "day" if data == "trending_day" else "week"
+        period_label = "Today" if period == "day" else "This Week"
+
+        results = await asyncio.to_thread(get_trending_tmdb, period)
+
+        # API failure (network error, bad key, non-2xx) - get_trending_tmdb()
+        # returns None in that case, distinct from a successful-but-empty list.
+        if results is None:
+            await callback.answer(
+                "⚠️ Couldn't fetch trending titles right now. Please try again.",
+                show_alert=True,
+            )
+            return
+
+        save_trending_results(user_id, results)
+
+        if not results:
+            await callback.message.edit_text(
+                text=f"😕 No trending titles found for **{period_label}** right now.",
+                reply_markup=trending_menu_keyboard()
+            )
+            await callback.answer()
+            return
+
+        lines = [f"🔥 **Trending - {period_label}**\n"]
+
+        for index, item in enumerate(results, start=1):
+            icon = "📺" if item.get("Type") == "series" else "🎬"
+            lines.append(f"{index}. {icon} {item.get('Title')} ({item.get('Year')})")
+
+        lines.append("\nTap a number below to see full details 👇")
+
+        await callback.message.edit_text(
+            text="\n".join(lines),
+            reply_markup=trending_list_keyboard(len(results))
+        )
+
+        await callback.answer()
+        return
+
+    # ---------------- 🔥 TRENDING NOW: BACK ----------------
+    # Fired from "⬅ Back" under a trending listing - returns to the
+    # Today / This Week / Home selection page (NOT the main menu).
+
+    if data == "trend_back":
+
+        await callback.message.edit_text(
+            text=(
+                "🔥 **Trending Now**\n\n"
+                "See what's trending on TMDb right now.\n\n"
+                "• 📅 **Today** - trending today\n"
+                "• 📈 **This Week** - trending this week\n\n"
+                "Pick one below 👇"
+            ),
+            reply_markup=trending_menu_keyboard()
+        )
+
+        await callback.answer()
+        return
+
+    # ---------------- 🔥 TRENDING NOW: ITEM SELECTED ----------------
+    # Fired when the user taps one of the numbered buttons under a
+    # trending listing ("trend_sel_<n>"). Looks up item `n` in the
+    # trending results this user last fetched, and sends its full details
+    # page (poster + info + OTT Release Status) as a NEW message - the
+    # trending listing itself is left in place so "⬅ Back" still works.
+
+    if data.startswith("trend_sel_"):
+
+        try:
+            index = int(data.replace("trend_sel_", "", 1))
+        except ValueError:
+            await callback.answer("Something went wrong. Please try again.", show_alert=True)
+            return
+
+        results = get_trending_results(user_id)
+
+        if not results or index < 1 or index > len(results):
+            await callback.answer(
+                "This trending list has expired. Please reopen 🔥 Trending Now.",
+                show_alert=True,
+            )
+            return
+
+        key_id = results[index - 1].get("imdbID")
+
+        await send_trending_details(
+            client, callback.message.chat.id, key_id, user_id=user_id
         )
 
         await callback.answer()
