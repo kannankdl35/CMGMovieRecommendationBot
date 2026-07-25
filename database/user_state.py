@@ -57,3 +57,27 @@ def get_last_watchlist_message(user_id: int):
 def clear_last_watchlist_message(user_id: int):
     if user_id in user_states:
         user_states[user_id].pop("watchlist_msg", None)
+
+
+# ---------- 🔥 Trending Now results tracking ----------
+# Remembers the last "Today"/"This Week" trending listing fetched for a
+# user, so the numbered buttons under it (keyboards/trending.py's
+# trending_list_keyboard()) can be mapped back to a title without
+# re-querying TMDb - button "3" means "the 3rd item in this list", the
+# same pattern database/watchlist_db.py + keyboards/watchlist.py use for
+# the Watchlist's own numbered buttons.
+
+def save_trending_results(user_id: int, results):
+    if user_id not in user_states:
+        user_states[user_id] = {}
+
+    user_states[user_id]["trending_results"] = results
+
+
+def get_trending_results(user_id: int):
+    return user_states.get(user_id, {}).get("trending_results", [])
+
+
+def clear_trending_results(user_id: int):
+    if user_id in user_states:
+        user_states[user_id].pop("trending_results", None)
