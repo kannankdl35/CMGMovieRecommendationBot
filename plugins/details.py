@@ -3,7 +3,7 @@ import asyncio
 # IMDb + TMDb detail lookup & formatter, used by both search flows
 # (SEARCH - IMDb / SEARCH - TMDb) and by the Watchlist.
 from services.imdb import get_details, get_series_episode_count
-from services.tmdb import get_details_tmdb
+from services.tmdb import get_details_tmdb, get_ott_status_from_key
 from utils.formatter import format_imdb_details
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
@@ -145,6 +145,64 @@ async def send_imdb_details(client, chat_id, key_id, user_id=None, in_watchlist=
         in_watchlist = await is_in_watchlist(user_id, key_id) if user_id else False
 
     buttons = build_details_keyboard(key_id, in_watchlist, context=context)
+
+    try:
+        if poster:
+            await client.send_photo(
+                chat_id=chat_id,
+                photo=poster,
+                caption=caption,
+                reply_markup=buttons
+            )
+        else:
+            await client.send_message(
+                chat_id=chat_id,
+                text=caption,
+                reply_markup=buttons
+            )
+    except Exception:
+        # Fallback to text if the poster URL fails to load as a photo
+        await client.send_message(
+            chat_id=chat_id,
+            text=caption,
+            reply_markup=buttons
+        )
+
+
+async def send_trending_details(client, chat_id, key_id, user_id=None):
+    """🔥 Trending Now details view - same details page as
+    send_imdb_details(), plus an "OTT Release Status" line appended to the
+    caption (whether the title is streaming anywhere yet, per TMDb's
+    watch-providers data - see services/tmdb.py's get_ott_status_from_key()).
+
+    Trending results are always TMDb-sourced (services.tmdb.get_trending_tmdb()),
+    so this always sends a NEW message (kept separate from
+    send_imdb_details() rather than adding an `show_ott` flag there) and
+    always uses context="search" for the Watchlist button: Add/Delete
+    toggles in place on this message, and "✅ Done" only deletes this
+    message - the trending listing above it, and the watchlist, are both
+    left untouched, per the Trending Now spec.
+    """
+    details = await asyncio.to_thread(fetch_details, key_id)
+
+    if not details:
+        await client.send_message(
+            chat_id, "❌ Could not fetch details for this title. Please try again."
+        )
+        return
+
+    total_episodes = _total_episodes(key_id, details)
+    caption = format_imdb_details(details, total_episodes=total_episodes)
+
+    ott_status = await asyncio.to_thread(get_ott_status_from_key, key_id)
+    caption += f"\n\n📡 **OTT Release Status**\n{ott_status}"
+
+    poster = details.get("Poster")
+    poster = poster if poster and poster != "N/A" else None
+
+    in_watchlist = await is_in_watchlist(user_id, key_id) if user_id else False
+
+    buttons = build_details_keyboard(key_id, in_watchlist, context="search")
 
     try:
         if poster:
