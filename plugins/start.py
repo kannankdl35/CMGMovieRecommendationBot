@@ -17,6 +17,7 @@ async def start_command(client, message):
         "• 🔍 **SEARCH - IMDb** - search powered by IMDb\n"
         "• 🔍 **SEARCH - TMDb** - search powered by TMDb\n"
         "• 🔥 **TRENDING NOW** - what's trending today/this week on TMDb\n"
+        "• 🎬 **UPCOMING MOVIES** - theatre & OTT releases by language\n"
         "• 📋 **WATCHLIST** - your saved titles\n\n"
         "Click a button below to get started."
     )
