@@ -2,12 +2,13 @@ from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 
 def home_keyboard():
-    """The Home menu has four buttons:
+    """The Home menu has five buttons:
 
       1. 🔍 SEARCH - IMDb
       2. 🔍 SEARCH - TMDb
       3. 🔥 TRENDING NOW
-      4. 📋 WATCHLIST
+      4. 🎬 UPCOMING MOVIES
+      5. 📋 WATCHLIST
 
     Both search buttons use Telegram Inline Mode, same as the old
     "Find Movies & Series" button - switch_inline_query_current_chat
@@ -17,9 +18,16 @@ def home_keyboard():
     search (services.imdb vs services.tmdb) - Telegram doesn't otherwise
     report which button was tapped, only the text the user ends up typing.
 
-    ✅ NEW: "🔥 Trending Now" (callback_data="trending_open") - opens the
+    "🔥 Trending Now" (callback_data="trending_open") opens the
     Today / This Week / Home selection page (keyboards/trending.py),
-    powered by TMDb's trending endpoints. Handled in plugins/callback.py.
+    powered by TMDb's trending endpoints.
+
+    ✅ NEW: "🎬 Upcoming Movies" (callback_data="upcoming_open") opens a
+    Theatre Release / OTT Release This Week / Back selection page
+    (keyboards/upcoming.py), each leading to a language picker
+    (Malayalam/Tamil/Telugu/Kannada/Hindi/English) and then a numbered
+    release list - see services/theatre_releases.py,
+    services/ott_releases.py, and plugins/callback.py.
     """
     return InlineKeyboardMarkup(
         [
@@ -39,6 +47,12 @@ def home_keyboard():
                 InlineKeyboardButton(
                     "🔥 Trending Now",
                     callback_data="trending_open"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "🎬 Upcoming Movies",
+                    callback_data="upcoming_open"
                 )
             ],
             [
