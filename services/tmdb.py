@@ -1,3 +1,5 @@
+from datetime import date, timedelta
+
 import requests
 
 from config import TMDB_API_KEY
@@ -62,8 +64,8 @@ def search_titles_tmdb(query):
             continue  # skip "person" rows mixed into multi-search results
 
         title = item.get("title") or item.get("name") or "Unknown"
-        date = item.get("release_date") or item.get("first_air_date") or ""
-        year = date[:4] if date else "N/A"
+        date_str = item.get("release_date") or item.get("first_air_date") or ""
+        year = date_str[:4] if date_str else "N/A"
         poster = _poster_url(item.get("poster_path"))
         key_id = f"tmdb_{media_type}_{item.get('id')}"
 
@@ -109,8 +111,8 @@ def get_details_tmdb(key_id):
         return None
 
     title = data.get("title") or data.get("name") or "Unknown"
-    date = data.get("release_date") or data.get("first_air_date") or ""
-    year = date[:4] if date else "N/A"
+    date_str = data.get("release_date") or data.get("first_air_date") or ""
+    year = date_str[:4] if date_str else "N/A"
 
     genres = ", ".join(g["name"] for g in data.get("genres", [])) or None
 
@@ -207,8 +209,8 @@ def get_trending_tmdb(period="day"):
             continue  # skip "person" rows mixed into /trending/all/*
 
         title = item.get("title") or item.get("name") or "Unknown"
-        date = item.get("release_date") or item.get("first_air_date") or ""
-        year = date[:4] if date else "N/A"
+        date_str = item.get("release_date") or item.get("first_air_date") or ""
+        year = date_str[:4] if date_str else "N/A"
         poster = _poster_url(item.get("poster_path"))
         key_id = f"tmdb_{media_type}_{item.get('id')}"
 
@@ -301,3 +303,77 @@ def get_ott_status_from_key(key_id):
         return "Not available on OTT yet."
 
     return get_ott_status_tmdb(media_type, tmdb_id)
+
+
+# ---------------------------------------------------------------------------
+# 📺 OTT Release This Week - English branch (see services/ott_releases.py,
+# which merges this with the scraped regional-language lists, and
+# keyboards/upcoming.py + plugins/callback.py for the bot-facing side)
+# ---------------------------------------------------------------------------
+
+
+def get_weekly_english_releases(region="US"):
+    """Weekly English-language OTT release list, via TMDb's discover/movie
+    with the Digital release-type filter (with_release_type=4) - confirmed
+    dense and reliable for English/US, unlike this exact same filter's very
+    sparse results for Indian regional languages (see chat history).
+
+    Normalized to the same shape services.ott_releases.py's scraped
+    regional entries use (title, release_date, platform, genre), plus a
+    ready-to-use "key_id" ("tmdb_movie_<id>") so tapping one of these in
+    the bot goes straight to the existing rich details page
+    (plugins/details.py's send_trending_details()) with no extra lookup
+    needed - unlike scraped regional entries, whose key_id is only
+    resolved lazily if/when a user taps into one (see
+    services/ott_releases.py's resolve_release_key()).
+
+    Meant to be called once a day by services.ott_releases.py's cache, not
+    per user request. Returns [] on any failure.
+    """
+    today = date.today()
+    next_week = today + timedelta(days=7)
+
+    try:
+        response = requests.get(
+            f"{BASE_URL}/discover/movie",
+            params={
+                "api_key": TMDB_API_KEY,
+                "region": region,
+                "with_release_type": 4,
+                "release_date.gte": str(today),
+                "release_date.lte": str(next_week),
+                "with_original_language": "en",
+                "sort_by": "popularity.desc",
+            },
+            timeout=10,
+        )
+        response.raise_for_status()
+        data = response.json()
+    except Exception:
+        return []
+
+    results = []
+
+    for item in data.get("results", [])[:10]:
+        tmdb_id = item.get("id")
+        title = item.get("title") or "Unknown"
+        release_date = item.get("release_date") or "N/A"
+        key_id = f"tmdb_movie_{tmdb_id}"
+
+        # One extra call per title, but this only runs during the once-a-day
+        # cache refresh (services/ott_releases.py), not per user request -
+        # negligible cost either way.
+        platform = get_ott_status_tmdb("movie", tmdb_id, region=region)
+
+        results.append(
+            {
+                "title": title,
+                "release_date": release_date,
+                "platform": platform,
+                "genre": None,
+                "language": "English",
+                "key_id": key_id,
+            }
+        )
+
+    return results
