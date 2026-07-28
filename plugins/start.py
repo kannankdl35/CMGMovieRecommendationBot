@@ -18,6 +18,7 @@ async def start_command(client, message):
         "• 🔍 **SEARCH - TMDb** - search powered by TMDb\n"
         "• 🔥 **TRENDING NOW** - what's trending today/this week on TMDb\n"
         "• 🎬 **UPCOMING MOVIES** - theatre & OTT releases by language\n"
+        "• 🎲 **SUGGEST RANDOM MOVIE** - a random pick, 7+ rated with 500+ votes\n"
         "• 📋 **WATCHLIST** - your saved titles\n\n"
         "Click a button below to get started."
     )
