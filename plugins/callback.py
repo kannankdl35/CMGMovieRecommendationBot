@@ -6,9 +6,10 @@ from pyrogram.types import CallbackQuery, InlineKeyboardMarkup, InlineKeyboardBu
 from keyboards.home import home_keyboard
 
 # 🔥 Trending Now keyboards (Today/This Week/Home selection page + the
-# numbered listing keyboard), and the TMDb trending fetcher.
+# numbered listing keyboard), the TMDb trending fetcher, and the
+# 🎲 Suggest Random Movie fetcher.
 from keyboards.trending import trending_menu_keyboard, trending_list_keyboard
-from services.tmdb import get_trending_tmdb
+from services.tmdb import get_trending_tmdb, get_random_movie
 
 # Per-user in-memory storage of the last trending listing fetched, so the
 # numbered buttons under it can be mapped back to a title (see
@@ -33,7 +34,7 @@ from plugins.watchlist import send_watchlist_view
 
 from plugins.details import (
     send_imdb_details,        # details renderer (search results / watchlist)
-    send_trending_details,     # details renderer for 🔥 Trending Now / 🎬 Upcoming Movies (adds OTT status)
+    send_trending_details,     # details renderer for 🔥 Trending Now / 🎬 Upcoming Movies / 🎲 Random (adds OTT status)
     fetch_details,             # resolves an IMDb id or a TMDb key to details
     build_details_keyboard,    # shared Watchlist/Search Another/Done keyboard builder
 )
@@ -47,6 +48,7 @@ HOME_TEXT = (
     "• 🔍 **SEARCH - TMDb** - search powered by TMDb\n"
     "• 🔥 **TRENDING NOW** - what's trending today/this week on TMDb\n"
     "• 🎬 **UPCOMING MOVIES** - theatre & OTT releases by language\n"
+    "• 🎲 **SUGGEST RANDOM MOVIE** - a random pick, 7+ rated with 500+ votes\n"
     "• 📋 **WATCHLIST** - your saved titles\n\n"
     "Click a button below to get started."
 )
@@ -371,6 +373,31 @@ async def callback_handler(client: Client, callback: CallbackQuery):
                     [[InlineKeyboardButton("✅ Done", callback_data="done")]]
                 )
             )
+
+        await callback.answer()
+        return
+
+    # ---------------- 🎲 SUGGEST RANDOM MOVIE ----------------
+    # Fired from the main menu's "🎲 Suggest Random Movie" button
+    # (callback_data="random_movie", see keyboards/home.py). No submenu -
+    # picks one random 7+/500-votes movie from TMDb and shows its full
+    # details page (poster + info + OTT status) as a new message,
+    # reusing the same renderer as Trending Now / Upcoming Movies.
+
+    if data == "random_movie":
+
+        key_id = await asyncio.to_thread(get_random_movie)
+
+        if not key_id:
+            await callback.answer(
+                "⚠️ Couldn't find a random movie right now. Please try again.",
+                show_alert=True,
+            )
+            return
+
+        await send_trending_details(
+            client, callback.message.chat.id, key_id, user_id=user_id
+        )
 
         await callback.answer()
         return
