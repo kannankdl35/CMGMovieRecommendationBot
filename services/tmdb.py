@@ -1,3 +1,4 @@
+import random
 from datetime import date, timedelta
 
 import requests
@@ -377,3 +378,79 @@ def get_weekly_english_releases(region="US"):
         )
 
     return results
+
+
+# ---------------------------------------------------------------------------
+# 🎲 Suggest Random Movie (see keyboards/home.py + plugins/callback.py)
+# ---------------------------------------------------------------------------
+
+
+def get_random_movie(min_rating=7.0, min_votes=500):
+    """Pick a genuinely random movie from TMDb's own quality filter -
+    vote_average >= min_rating AND vote_count >= min_votes (the vote-count
+    floor matters: without it, sorting/filtering purely on rating surfaces
+    obscure titles with 2-3 votes at a perfect score, not genuinely
+    well-regarded movies).
+
+    Mechanism: /discover/movie with those two filters returns a paginated
+    result set (up to TMDb's hard cap of 500 pages). This makes one call
+    to see how many pages exist, picks a genuinely random page number, then
+    makes a second call for that page and picks a random title from it -
+    so repeated taps give varied results instead of always the same
+    "page 1, item 1" answer sort_by would otherwise pin down.
+
+    Returns a "tmdb_movie_<id>" key (ready for plugins/details.py's
+    send_trending_details()), or None on any failure / empty result set.
+    """
+    base_params = {
+        "api_key": TMDB_API_KEY,
+        "vote_average.gte": min_rating,
+        "vote_count.gte": min_votes,
+        "sort_by": "popularity.desc",
+        "include_adult": "false",
+    }
+
+    try:
+        first_response = requests.get(
+            f"{BASE_URL}/discover/movie",
+            params={**base_params, "page": 1},
+            timeout=10,
+        )
+        first_response.raise_for_status()
+        first_data = first_response.json()
+    except Exception:
+        return None
+
+    total_pages = first_data.get("total_pages") or 0
+    total_pages = min(total_pages, 500)  # TMDb's hard cap regardless of actual result count
+
+    if total_pages < 1:
+        return None
+
+    random_page = random.randint(1, total_pages)
+
+    if random_page == 1:
+        page_data = first_data
+    else:
+        try:
+            response = requests.get(
+                f"{BASE_URL}/discover/movie",
+                params={**base_params, "page": random_page},
+                timeout=10,
+            )
+            response.raise_for_status()
+            page_data = response.json()
+        except Exception:
+            page_data = first_data  # fall back to page 1's results rather than failing outright
+
+    results = page_data.get("results") or []
+    if not results:
+        return None
+
+    chosen = random.choice(results)
+    tmdb_id = chosen.get("id")
+
+    if not tmdb_id:
+        return None
+
+    return f"tmdb_movie_{tmdb_id}"
