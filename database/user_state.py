@@ -81,28 +81,3 @@ def get_trending_results(user_id: int):
 def clear_trending_results(user_id: int):
     if user_id in user_states:
         user_states[user_id].pop("trending_results", None)
-
-
-# ---------- 🎲 Suggest Random Movie results tracking ----------
-# Remembers the last random-movie listing fetched for a user, keyed by
-# language, so the numbered buttons under it
-# (keyboards/random_movies.py's random_list_keyboard()) can be mapped back
-# to a title without re-querying TMDb - same pattern as
-# save_trending_results()/get_trending_results() above. Keyed by language
-# (rather than a single slot) so switching languages doesn't invalidate a
-# listing the user might tap "🔙 Back" into again later.
-
-def save_random_results(user_id: int, lang: str, results):
-    if user_id not in user_states:
-        user_states[user_id] = {}
-
-    user_states[user_id].setdefault("random_results", {})[lang] = results
-
-
-def get_random_results(user_id: int, lang: str):
-    return user_states.get(user_id, {}).get("random_results", {}).get(lang, [])
-
-
-def clear_random_results(user_id: int):
-    if user_id in user_states:
-        user_states[user_id].pop("random_results", None)
