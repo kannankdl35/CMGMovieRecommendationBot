@@ -30,11 +30,15 @@ def home_keyboard():
     release list - see services/theatre_releases.py,
     services/ott_releases.py, and plugins/callback.py.
 
-    ✅ NEW: "🎲 Suggest Random Movie" (callback_data="random_movie") picks
-    one random movie from TMDb with a 7+ rating from at least 500 votes
-    (services.tmdb.get_random_movie()) and shows its full details page
-    immediately - no submenu, one tap and done. Handled in
-    plugins/callback.py.
+    ✅ "🎲 Suggest Random Movie" (callback_data="random_open") opens a
+    Language selection page (keyboards/random_movies.py: Malayalam, Tamil,
+    Hindi, Kannada, Telugu, English, Korean, Others). Picking a language
+    fetches a batch of random TMDb movies in that language (Others =
+    anything outside the other seven) meeting that language's rating/vote
+    floor, and shows them as a numbered list - tapping a number opens the
+    full details page. All handled in plugins/callback.py, backed by
+    services/tmdb.py's get_random_movies_by_language() /
+    get_random_movies_other_languages().
     """
     return InlineKeyboardMarkup(
         [
@@ -65,7 +69,7 @@ def home_keyboard():
             [
                 InlineKeyboardButton(
                     "🎲 Suggest Random Movie",
-                    callback_data="random_movie"
+                    callback_data="random_open"
                 )
             ],
             [
