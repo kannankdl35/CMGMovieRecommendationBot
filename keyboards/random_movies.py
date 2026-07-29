@@ -1,14 +1,15 @@
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 # ---------------------------------------------------------------------------
-# Keyboards for "🎲 Suggest Random Movie" (see keyboards/home.py for the
+# Keyboard for "🎲 Suggest Random Movie" (see keyboards/home.py for the
 # main-menu entry point and plugins/callback.py for everything these
 # buttons trigger).
 #
-# Flow: Home -> Language page -> numbered listing of random movies for that
-# language -> full details page. Same category -> list -> details shape as
-# 🔥 Trending Now (keyboards/trending.py) and 🎬 Upcoming Movies
-# (keyboards/upcoming.py).
+# Flow: Home -> Language page -> tap a language -> one random movie's full
+# details are sent straight away (poster + info + Watchlist/Search
+# Another/Done), same details view as 🔥 Trending Now /
+# 🎬 Upcoming Movies (plugins/details.py's send_trending_details()) - no
+# intermediate numbered list.
 #
 # "others" is a catch-all bucket (any language that isn't one of the other
 # seven) rather than a single ISO language code - see
@@ -45,15 +46,15 @@ LANGUAGE_CODES = {
 }
 
 # Quality floor per bucket, per the feature spec:
-#   - the 5 regional languages: rating >= 7, votes >= 100
+#   - the 5 regional languages: rating >= 7, votes >= 50
 #   - English / Korean: rating >= 7, votes >= 500
 #   - Others: rating >= 7, votes >= 1000
 LANGUAGE_FILTERS = {
-    "malayalam": (7.0, 100),
-    "tamil": (7.0, 100),
-    "hindi": (7.0, 100),
-    "kannada": (7.0, 100),
-    "telugu": (7.0, 100),
+    "malayalam": (7.0, 50),
+    "tamil": (7.0, 50),
+    "hindi": (7.0, 50),
+    "kannada": (7.0, 50),
+    "telugu": (7.0, 50),
     "english": (7.0, 500),
     "korean": (7.0, 500),
     "others": (7.0, 1000),
@@ -83,32 +84,3 @@ def random_language_keyboard():
     rows.append([InlineKeyboardButton("🔙 Back", callback_data="back_home")])
 
     return InlineKeyboardMarkup(rows)
-
-
-def random_list_keyboard(lang, count):
-    """Numbered buttons (1..count) for a language's random-movie listing,
-    5 per row, plus a "🔙 Back" button.
-
-    Button `n`'s callback_data is "random_sel_<lang>_<n>" -
-    plugins/callback.py looks up index `n` in the random results this user
-    last fetched for that language (database/user_state.py).
-
-    "🔙 Back" (callback_data "random_open") returns to the language page.
-    """
-    buttons = []
-    row = []
-
-    for index in range(1, count + 1):
-        row.append(
-            InlineKeyboardButton(str(index), callback_data=f"random_sel_{lang}_{index}")
-        )
-        if len(row) == 5:
-            buttons.append(row)
-            row = []
-
-    if row:
-        buttons.append(row)
-
-    buttons.append([InlineKeyboardButton("🔙 Back", callback_data="random_open")])
-
-    return InlineKeyboardMarkup(buttons)
