@@ -6,15 +6,28 @@ from pyrogram.types import CallbackQuery, InlineKeyboardMarkup, InlineKeyboardBu
 from keyboards.home import home_keyboard
 
 # 🔥 Trending Now keyboards (Today/This Week/Home selection page + the
-# numbered listing keyboard), the TMDb trending fetcher, and the
-# 🎲 Suggest Random Movie fetcher.
+# numbered listing keyboard) and the TMDb trending fetcher.
 from keyboards.trending import trending_menu_keyboard, trending_list_keyboard
-from services.tmdb import get_trending_tmdb, get_random_movie
+from services.tmdb import get_trending_tmdb
 
-# Per-user in-memory storage of the last trending listing fetched, so the
-# numbered buttons under it can be mapped back to a title (see
-# database/user_state.py).
-from database.user_state import save_trending_results, get_trending_results
+# 🎲 Suggest Random Movie keyboards (language picker + numbered listing)
+# and the TMDb fetchers behind each language bucket.
+from keyboards.random_movies import (
+    random_language_keyboard,
+    random_list_keyboard,
+    LANGUAGE_LABELS as RANDOM_LANGUAGE_LABELS,
+    LANGUAGE_CODES as RANDOM_LANGUAGE_CODES,
+    LANGUAGE_FILTERS as RANDOM_LANGUAGE_FILTERS,
+)
+from services.tmdb import get_random_movies_by_language, get_random_movies_other_languages
+
+# Per-user in-memory storage of the last trending / random-movie listing
+# fetched, so the numbered buttons under each can be mapped back to a
+# title (see database/user_state.py).
+from database.user_state import (
+    save_trending_results, get_trending_results,
+    save_random_results, get_random_results,
+)
 
 # 🎬 Upcoming Movies (Theatre Release / OTT Release This Week) keyboards +
 # data sources - see keyboards/upcoming.py, services/theatre_releases.py,
@@ -48,7 +61,7 @@ HOME_TEXT = (
     "• 🔍 **SEARCH - TMDb** - search powered by TMDb\n"
     "• 🔥 **TRENDING NOW** - what's trending today/this week on TMDb\n"
     "• 🎬 **UPCOMING MOVIES** - theatre & OTT releases by language\n"
-    "• 🎲 **SUGGEST RANDOM MOVIE** - a random pick, 7+ rated with 500+ votes\n"
+    "• 🎲 **SUGGEST RANDOM MOVIE** - pick a language, get 7+ rated random picks\n"
     "• 📋 **WATCHLIST** - your saved titles\n\n"
     "Click a button below to get started."
 )
@@ -76,6 +89,12 @@ CATEGORY_LABELS = {
 
 def _upcoming_language_text(category):
     return f"{CATEGORY_LABELS.get(category, category.title())}\n\nPick a language below 👇"
+
+
+RANDOM_LANGUAGE_TEXT = (
+    "🎲 **Suggest Random Movie**\n\n"
+    "Pick a language below 👇"
+)
 
 
 @Client.on_callback_query()
@@ -377,23 +396,117 @@ async def callback_handler(client: Client, callback: CallbackQuery):
         await callback.answer()
         return
 
-    # ---------------- 🎲 SUGGEST RANDOM MOVIE ----------------
-    # Fired from the main menu's "🎲 Suggest Random Movie" button
-    # (callback_data="random_movie", see keyboards/home.py). No submenu -
-    # picks one random 7+/500-votes movie from TMDb and shows its full
-    # details page (poster + info + OTT status) as a new message,
-    # reusing the same renderer as Trending Now / Upcoming Movies.
+    # ---------------- 🎲 SUGGEST RANDOM MOVIE: LANGUAGE MENU ----------------
+    # Fired both from the main menu's "🎲 Suggest Random Movie" button
+    # (callback_data="random_open", see keyboards/home.py) AND from
+    # "🔙 Back" under a random-movie listing (keyboards/random_movies.py's
+    # random_list_keyboard() reuses this same callback_data). Shows the
+    # Malayalam/Tamil/Hindi/Kannada/Telugu/English/Korean/Others language
+    # picker (keyboards/random_movies.py), edited in place.
 
-    if data == "random_movie":
+    if data == "random_open":
 
-        key_id = await asyncio.to_thread(get_random_movie)
+        await callback.message.edit_text(
+            text=RANDOM_LANGUAGE_TEXT,
+            reply_markup=random_language_keyboard()
+        )
 
-        if not key_id:
+        await callback.answer()
+        return
+
+    # ---------------- 🎲 SUGGEST RANDOM MOVIE: LANGUAGE SELECTED ----------------
+    # Fetches a batch of random movies for the tapped language
+    # ("random_lang_<lang>") and shows them as a numbered list, same shape
+    # as 🔥 Trending Now's listing. Malayalam/Tamil/Hindi/Kannada/Telugu go
+    # through TMDb's with_original_language filter (7+ rating, 100+
+    # votes); English/Korean use the same filter with a 500+ vote floor;
+    # "Others" (anything outside those seven) has no single language code
+    # to filter to, so it's handled by a dedicated exclude-list fetcher
+    # with a 1000+ vote floor - see services/tmdb.py.
+
+    if data.startswith("random_lang_"):
+
+        lang = data.replace("random_lang_", "", 1)
+
+        if lang not in RANDOM_LANGUAGE_LABELS:
+            await callback.answer("Something went wrong. Please try again.", show_alert=True)
+            return
+
+        min_rating, min_votes = RANDOM_LANGUAGE_FILTERS[lang]
+
+        if lang == "others":
+            results = await asyncio.to_thread(
+                get_random_movies_other_languages,
+                min_rating,
+                min_votes,
+                10,
+                set(RANDOM_LANGUAGE_CODES.values()),
+            )
+        else:
+            lang_code = RANDOM_LANGUAGE_CODES[lang]
+            results = await asyncio.to_thread(
+                get_random_movies_by_language, lang_code, min_rating, min_votes, 10
+            )
+
+        save_random_results(user_id, lang, results)
+
+        label = RANDOM_LANGUAGE_LABELS[lang]
+
+        if not results:
+            await callback.message.edit_text(
+                text=(
+                    f"🎲 **Suggest Random Movie - {label}**\n\n"
+                    "😕 No movies found right now. Please try again."
+                ),
+                reply_markup=random_language_keyboard()
+            )
+            await callback.answer()
+            return
+
+        lines = [f"🎲 **Suggest Random Movie - {label}**\n"]
+
+        for index, item in enumerate(results, start=1):
+            lines.append(f"{index}. 🎬 {item.get('Title')} ({item.get('Year')})")
+
+        lines.append("\nTap a number below to see full details 👇")
+
+        await callback.message.edit_text(
+            text="\n".join(lines),
+            reply_markup=random_list_keyboard(lang, len(results))
+        )
+
+        await callback.answer()
+        return
+
+    # ---------------- 🎲 SUGGEST RANDOM MOVIE: ITEM SELECTED ----------------
+    # Fired when the user taps one of the numbered buttons under a
+    # random-movie listing ("random_sel_<lang>_<n>"). Looks up item `n` in
+    # the random results this user last fetched for that language, and
+    # sends its full details page (poster + info + OTT status) as a NEW
+    # message - the listing itself is left in place so "🔙 Back" still
+    # works.
+
+    if data.startswith("random_sel_"):
+
+        remainder = data[len("random_sel_"):]
+
+        try:
+            lang, index_str = remainder.rsplit("_", 1)
+            index = int(index_str)
+        except ValueError:
+            await callback.answer("Something went wrong. Please try again.", show_alert=True)
+            return
+
+        results = get_random_results(user_id, lang)
+
+        if not results or index < 1 or index > len(results):
             await callback.answer(
-                "⚠️ Couldn't find a random movie right now. Please try again.",
+                "This list may have refreshed. Please reopen 🎲 Suggest Random Movie.",
                 show_alert=True,
             )
             return
+
+        key_id = results[index - 1].get("imdbID")
 
         await send_trending_details(
             client, callback.message.chat.id, key_id, user_id=user_id
