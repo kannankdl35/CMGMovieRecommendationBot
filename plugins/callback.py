@@ -1,3 +1,5 @@
+# Location: plugins/callback.py  (REPLACE ENTIRE FILE)
+
 import asyncio
 
 from pyrogram import Client
@@ -33,7 +35,7 @@ from services.theatre_releases import get_cached_theatre_releases
 from services.ott_releases import get_cached_ott_releases, resolve_release_key
 
 # Watchlist database helpers
-from database.watchlist_db import add_to_watchlist, remove_from_watchlist
+from database.watchlist_db import add_to_watchlist, remove_from_watchlist, is_in_watchlist
 
 # Shared watchlist text/keyboard builder + the delete-then-resend helper,
 # used by the Watchlist Home button (callback_data="watchlist_open" below)
@@ -41,11 +43,27 @@ from database.watchlist_db import add_to_watchlist, remove_from_watchlist
 # inside this Telegram chat - no Web App / external page.
 from plugins.watchlist import send_watchlist_view
 
+# ✅ NEW - "This Month Watched" feature: database helpers + the shared
+# listing/achievements view builder (plugins/month_watched.py), same
+# pattern as the Watchlist above.
+from database.month_watched_db import (
+    add_to_month_watched,
+    remove_from_month_watched,
+    is_in_month_watched,
+    compute_monthly_stats,
+)
+from keyboards.month_watched import achievements_keyboard
+from plugins.month_watched import (
+    send_month_watched_view,
+    get_month_watched_view,
+    build_achievements_text,
+)
+
 from plugins.details import (
-    send_imdb_details,        # details renderer (search results / watchlist)
+    send_imdb_details,        # details renderer (search results / watchlist / this month watched)
     send_trending_details,     # details renderer for 🔥 Trending Now / 🎬 Upcoming Movies / 🎲 Random (adds OTT status)
     fetch_details,             # resolves an IMDb id or a TMDb key to details
-    build_details_keyboard,    # shared Watchlist/Search Another/Done keyboard builder
+    build_details_keyboard,    # shared Watchlist/This Month Watched/Search Another/Done keyboard builder
 )
 
 
@@ -58,7 +76,9 @@ HOME_TEXT = (
     "• 🔥 **TRENDING NOW** - what's trending today/this week on TMDb\n"
     "• 🎬 **UPCOMING MOVIES** - theatre & OTT releases by language\n"
     "• 🎲 **SUGGEST RANDOM MOVIE** - pick a language, get 7+ rated random picks\n"
-    "• 📋 **WATCHLIST** - your saved titles\n\n"
+    "• 📋 **WATCHLIST** - your saved titles\n"
+    "• 🗓️ **THIS MONTH WATCHED** - track what you've watched this month + "
+    "unlock achievements\n\n"
     "Click a button below to get started."
 )
 
@@ -560,7 +580,13 @@ async def callback_handler(client: Client, callback: CallbackQuery):
             media_type=details.get("Type", "movie"),
         )
 
-        new_markup = build_details_keyboard(imdb_id, in_watchlist=True, context="search")
+        # Preserve whatever the This Month Watched button is currently
+        # showing - this callback only changes the Watchlist button.
+        in_month_watched = await is_in_month_watched(user_id, imdb_id)
+
+        new_markup = build_details_keyboard(
+            imdb_id, in_watchlist=True, in_month_watched=in_month_watched, context="search"
+        )
 
         if callback.message:
             try:
@@ -590,7 +616,11 @@ async def callback_handler(client: Client, callback: CallbackQuery):
 
         await remove_from_watchlist(user_id, imdb_id)
 
-        new_markup = build_details_keyboard(imdb_id, in_watchlist=False, context="search")
+        in_month_watched = await is_in_month_watched(user_id, imdb_id)
+
+        new_markup = build_details_keyboard(
+            imdb_id, in_watchlist=False, in_month_watched=in_month_watched, context="search"
+        )
 
         if callback.message:
             try:
@@ -651,6 +681,176 @@ async def callback_handler(client: Client, callback: CallbackQuery):
         await send_watchlist_view(client, chat_id, user_id)
 
         await callback.answer("Removed from Watchlist 🗑")
+        return
+
+    # ---------------- 🗓️ THIS MONTH WATCHED ----------------
+    # Fired from the main menu's "🗓️ This Month Watched" button
+    # (callback_data="month_watched_open", see keyboards/home.py). Deletes
+    # the Home menu message and sends the current-month watched listing +
+    # Monthly Status as a fresh message, same delete-then-resend pattern
+    # as "watchlist_open" above.
+
+    if data == "month_watched_open":
+
+        try:
+            await callback.message.delete()
+        except Exception:
+            pass
+
+        await send_month_watched_view(client, callback.message.chat.id, user_id)
+
+        await callback.answer()
+        return
+
+    # ---------------- 🗓️ THIS MONTH WATCHED: SEE ACHIEVEMENTS ----------------
+    # Fired from "🏆 See the Achievements" under the This Month Watched
+    # listing. Edited IN PLACE over that same message (it's always a plain
+    # text message, same as the Home menu, so edit_text always applies -
+    # no photo/text fallback juggling needed here).
+    #
+    # NOTE: checked before the generic "mw_" numbered-selection handler
+    # further below, since "mw_achievements"/"mw_achievements_back" also
+    # start with "mw_".
+
+    if data == "mw_achievements":
+
+        stats = await compute_monthly_stats(user_id)
+        text = build_achievements_text(stats)
+
+        try:
+            await callback.message.edit_text(text=text, reply_markup=achievements_keyboard())
+        except Exception:
+            pass
+
+        await callback.answer()
+        return
+
+    # ---------------- 🗓️ THIS MONTH WATCHED: ACHIEVEMENTS BACK ----------------
+    # Fired from "⬅️ Back" on the Achievements page - returns to the This
+    # Month Watched listing (NOT the main menu), edited in place over the
+    # same message.
+
+    if data == "mw_achievements_back":
+
+        text, keyboard = await get_month_watched_view(user_id)
+
+        try:
+            await callback.message.edit_text(text=text, reply_markup=keyboard)
+        except Exception:
+            pass
+
+        await callback.answer()
+        return
+
+    # ---------------- 🗓️ THIS MONTH WATCHED: ITEM SELECTED ----------------
+    # Fired when the user taps one of the numbered buttons under the This
+    # Month Watched listing ("mw_<imdb_id>") - opens that title's normal
+    # details page (context="month_watched" so its This Month Watched
+    # button deletes-and-refreshes the listing instead of toggling in
+    # place, same as the Watchlist's "wl_" handler above).
+
+    if data.startswith("mw_"):
+
+        imdb_id = data.replace("mw_", "", 1)
+
+        await send_imdb_details(
+            client, callback.message.chat.id, imdb_id,
+            user_id=user_id, in_month_watched=True, context="month_watched",
+        )
+
+        await callback.answer()
+        return
+
+    # ---------------- ADD TO THIS MONTH WATCHED ----------------
+
+    if data.startswith("addmw_"):
+
+        imdb_id = data.replace("addmw_", "", 1)
+
+        details = await asyncio.to_thread(fetch_details, imdb_id)
+
+        if not details:
+            await callback.answer("Could not add this title. Please try again.", show_alert=True)
+            return
+
+        added = await add_to_month_watched(user_id, imdb_id, details)
+
+        # Preserve whatever the Watchlist button is currently showing -
+        # this callback only changes the This Month Watched button.
+        in_watchlist = await is_in_watchlist(user_id, imdb_id)
+
+        new_markup = build_details_keyboard(
+            imdb_id, in_watchlist=in_watchlist, in_month_watched=True, context="search"
+        )
+
+        if callback.message:
+            try:
+                await callback.message.edit_reply_markup(reply_markup=new_markup)
+            except Exception:
+                pass
+        elif callback.inline_message_id:
+            try:
+                await client.edit_inline_reply_markup(
+                    callback.inline_message_id, reply_markup=new_markup
+                )
+            except Exception:
+                pass
+
+        if added:
+            await callback.answer("Added to This Month Watched ✅")
+        else:
+            await callback.answer("Already added this month.")
+
+        return
+
+    # ---------------- REMOVE FROM THIS MONTH WATCHED, IN PLACE ----------------
+
+    if data.startswith("rmmw_"):
+
+        imdb_id = data.replace("rmmw_", "", 1)
+
+        await remove_from_month_watched(user_id, imdb_id)
+
+        in_watchlist = await is_in_watchlist(user_id, imdb_id)
+
+        new_markup = build_details_keyboard(
+            imdb_id, in_watchlist=in_watchlist, in_month_watched=False, context="search"
+        )
+
+        if callback.message:
+            try:
+                await callback.message.edit_reply_markup(reply_markup=new_markup)
+            except Exception:
+                pass
+        elif callback.inline_message_id:
+            try:
+                await client.edit_inline_reply_markup(
+                    callback.inline_message_id, reply_markup=new_markup
+                )
+            except Exception:
+                pass
+
+        await callback.answer("Removed from This Month Watched 🗑", show_alert=True)
+        return
+
+    # ---------------- DELETE FROM THIS MONTH WATCHED (from listing) ----------------
+
+    if data.startswith("delmw_"):
+
+        imdb_id = data.replace("delmw_", "", 1)
+
+        await remove_from_month_watched(user_id, imdb_id)
+
+        chat_id = callback.message.chat.id
+
+        try:
+            await callback.message.delete()
+        except Exception:
+            pass
+
+        await send_month_watched_view(client, chat_id, user_id)
+
+        await callback.answer("Removed from This Month Watched 🗑")
         return
 
     # ---------------- UNKNOWN ----------------
