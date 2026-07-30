@@ -1,8 +1,10 @@
+# Location: keyboards/home.py  (REPLACE ENTIRE FILE)
+
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 
 def home_keyboard():
-    """The Home menu has six buttons:
+    """The Home menu has seven buttons:
 
       1. 🔍 SEARCH - IMDb
       2. 🔍 SEARCH - TMDb
@@ -10,6 +12,7 @@ def home_keyboard():
       4. 🎬 UPCOMING MOVIES
       5. 🎲 SUGGEST RANDOM MOVIE
       6. 📋 WATCHLIST
+      7. 🗓️ THIS MONTH WATCHED
 
     Both search buttons use Telegram Inline Mode, same as the old
     "Find Movies & Series" button - switch_inline_query_current_chat
@@ -39,6 +42,12 @@ def home_keyboard():
     full details page. All handled in plugins/callback.py, backed by
     services/tmdb.py's get_random_movies_by_language() /
     get_random_movies_other_languages().
+
+    ✅ "🗓️ This Month Watched" (callback_data="month_watched_open") opens
+    the current calendar month's watched list (movies + series the user
+    tapped "➕ Add to This Month Watched" on), that month's stats, and a
+    "🏆 See the Achievements" page - see keyboards/month_watched.py,
+    database/month_watched_db.py, and plugins/month_watched.py.
     """
     return InlineKeyboardMarkup(
         [
@@ -76,6 +85,12 @@ def home_keyboard():
                 InlineKeyboardButton(
                     "📋 WATCHLIST",
                     callback_data="watchlist_open"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "🗓️ This Month Watched",
+                    callback_data="month_watched_open"
                 )
             ]
         ]
