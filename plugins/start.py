@@ -3,10 +3,6 @@
 from pyrogram import Client, filters
 
 from keyboards.home import home_keyboard
-
-# ✅ NEW - "This Month Watched" feature (Monthly Reset & Report): records
-# this user so the end-of-month report knows to message them, even if
-# their stats end up all zero for the month.
 from database.users_db import register_user
 
 print("✅ START PLUGIN LOADED")
@@ -19,7 +15,12 @@ async def start_command(client, message):
 
     user = message.from_user
     if user:
-        await register_user(user.id, username=user.username, first_name=user.first_name)
+        try:
+            await register_user(user.id, username=user.username, first_name=user.first_name)
+        except Exception as e:
+            print("⚠️ Could not register user (continuing anyway)")
+            print(f"Type: {type(e).__name__}")
+            print(f"Message: {e}")
 
     text = (
         "👋 **Welcome to CMG Movie Recommendation Bot**\n\n"
