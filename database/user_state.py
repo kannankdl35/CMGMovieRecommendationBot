@@ -1,3 +1,5 @@
+# Location: database/user_state.py  (REPLACE ENTIRE FILE)
+
 # Temporary in-memory user state
 # Later can be moved to MongoDB
 
@@ -81,3 +83,26 @@ def get_trending_results(user_id: int):
 def clear_trending_results(user_id: int):
     if user_id in user_states:
         user_states[user_id].pop("trending_results", None)
+
+
+# ---------- 🗓️ This Month Watched listing message tracking ----------
+# ✅ NEW: Same pattern as the Watchlist's set_last_watchlist_message() above -
+# remembers the (chat_id, message_id) of the last "This Month Watched"
+# listing shown to a user, so a fresh open or a refresh after add/delete
+# removes the previous listing instead of leaving duplicates stacked in
+# the chat.
+
+def set_last_month_watched_message(user_id: int, chat_id: int, message_id: int):
+    if user_id not in user_states:
+        user_states[user_id] = {}
+
+    user_states[user_id]["month_watched_msg"] = (chat_id, message_id)
+
+
+def get_last_month_watched_message(user_id: int):
+    return user_states.get(user_id, {}).get("month_watched_msg")
+
+
+def clear_last_month_watched_message(user_id: int):
+    if user_id in user_states:
+        user_states[user_id].pop("month_watched_msg", None)
