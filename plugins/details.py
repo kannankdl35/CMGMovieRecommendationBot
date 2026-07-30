@@ -1,7 +1,9 @@
+# Location: plugins/details.py  (REPLACE ENTIRE FILE)
+
 import asyncio
 
 # IMDb + TMDb detail lookup & formatter, used by both search flows
-# (SEARCH - IMDb / SEARCH - TMDb) and by the Watchlist.
+# (SEARCH - IMDb / SEARCH - TMDb) and by the Watchlist / This Month Watched.
 from services.imdb import get_details, get_series_episode_count
 from services.tmdb import get_details_tmdb, get_ott_status_from_key
 from utils.formatter import format_imdb_details
@@ -11,6 +13,12 @@ from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 # watchlist button (Add vs Delete) is shown regardless of where the details
 # page was opened from.
 from database.watchlist_db import is_in_watchlist
+
+# ✅ NEW - "This Month Watched" feature: same auto-detect pattern as
+# is_in_watchlist above, so the correct button ("➕ Add to This Month
+# Watched" vs "➖ Delete from This Month Watched") is shown regardless of
+# where the details page was opened from.
+from database.month_watched_db import is_in_month_watched
 
 
 def _source_mode(key_id):
@@ -25,11 +33,12 @@ def fetch_details(key_id):
     "tmdb_tv_1396", from the SEARCH - TMDb flow - see services/tmdb.py).
 
     This is the single place that decides which backend to call - every
-    other part of the bot (watchlist, add/remove buttons,
-    plugins/callback.py, plugins/inline.py) just passes whichever key_id it
-    was originally given straight through to this function. This makes a
-    blocking HTTP request - call it via asyncio.to_thread() from async code
-    (see send_imdb_details() below) rather than awaiting it directly.
+    other part of the bot (watchlist, this month watched, add/remove
+    buttons, plugins/callback.py, plugins/inline.py) just passes whichever
+    key_id it was originally given straight through to this function. This
+    makes a blocking HTTP request - call it via asyncio.to_thread() from
+    async code (see send_imdb_details() below) rather than awaiting it
+    directly.
     """
     if _source_mode(key_id) == "tmdb":
         return get_details_tmdb(key_id)
@@ -50,25 +59,41 @@ def _total_episodes(key_id, details):
     return get_series_episode_count(key_id, details.get("totalSeasons"))
 
 
-def build_details_keyboard(key_id, in_watchlist, context="search"):
-    """Build the Watchlist (Add or Delete) / Search Another / Done inline
-    keyboard shown under a details page.
+def build_details_keyboard(key_id, in_watchlist, in_month_watched=False, context="search"):
+    """Build the Watchlist (Add or Delete) / This Month Watched (Add or
+    Delete) / Search Another / Done inline keyboard shown under a details
+    page.
 
-    `context` controls how the Watchlist button behaves once tapped:
+    `context` controls how BOTH toggle buttons behave once tapped:
 
-    - "search" (default): used for SEARCH - IMDb / SEARCH - TMDb results
-      (including the details page shown right after picking an inline
-      result - see plugins/inline.py's inline_result_chosen()).
-        * Add to Watchlist  -> callback_data "addwl_<key_id>"
-        * Delete from Watchlist -> callback_data "rmwl_<key_id>": removes
-          the item from the database, shows a popup confirmation, and
-          swaps the button back to "Add to Watchlist" IN PLACE - the
-          message itself is never deleted.
+    - "search" (default): used for SEARCH - IMDb / SEARCH - TMDb results,
+      🔥 Trending Now, 🎬 Upcoming Movies, 🎲 Suggest a Movie (including the
+      details page shown right after picking an inline result - see
+      plugins/inline.py's inline_result_chosen()).
+        * Watchlist:
+            Add    -> callback_data "addwl_<key_id>"
+            Delete -> callback_data "rmwl_<key_id>": removes the item from
+                      the database, shows a popup confirmation, and swaps
+                      the button back to "Add to Watchlist" IN PLACE - the
+                      message itself is never deleted.
+        * This Month Watched:
+            Add    -> callback_data "addmw_<key_id>"
+            Delete -> callback_data "rmmw_<key_id>": same in-place swap as
+                      rmwl_ above.
     - "watchlist": used for details opened from the user's own
       /watchlist listing.
-        * Delete from Watchlist -> callback_data "delwl_<key_id>":
+        * Watchlist Delete -> callback_data "delwl_<key_id>": removes the
+          item, deletes this details message, and refreshes the watchlist
+          listing.
+        * This Month Watched button still behaves like "search" (in place)
+          since it's unrelated to the Watchlist listing this page was
+          opened from.
+    - "month_watched": used for details opened from the user's own
+      "🗓️ This Month Watched" listing.
+        * This Month Watched Delete -> callback_data "delmw_<key_id>":
           removes the item, deletes this details message, and refreshes
-          the watchlist listing.
+          the This Month Watched listing.
+        * Watchlist button still behaves like "search" (in place).
 
     "🔎 Search Another Movie/Series" pre-fills "imdb "/"tmdb " into the
     chat's inline query box (same mechanic as the Home menu's two search
@@ -78,7 +103,7 @@ def build_details_keyboard(key_id, in_watchlist, context="search"):
 
     The "✅ Done" button (callback_data "done") is shown for every context.
     Tapping it only dismisses/clears that details message; it never
-    touches the saved watchlist entry itself.
+    touches the saved watchlist or this-month-watched entries themselves.
 
     All of these callback_data values are handled in plugins/callback.py.
     """
@@ -96,10 +121,25 @@ def build_details_keyboard(key_id, in_watchlist, context="search"):
             "❤️ Add to Watchlist", callback_data=f"addwl_{key_id}"
         )
 
+    if in_month_watched:
+        if context == "month_watched":
+            month_watched_button = InlineKeyboardButton(
+                "➖ Delete from This Month Watched", callback_data=f"delmw_{key_id}"
+            )
+        else:
+            month_watched_button = InlineKeyboardButton(
+                "➖ Delete from This Month Watched", callback_data=f"rmmw_{key_id}"
+            )
+    else:
+        month_watched_button = InlineKeyboardButton(
+            "➕ Add to This Month Watched", callback_data=f"addmw_{key_id}"
+        )
+
     mode = _source_mode(key_id)
 
     rows = [
         [watchlist_button],
+        [month_watched_button],
         [
             InlineKeyboardButton(
                 "🔎 Search Another Movie/Series",
@@ -112,20 +152,25 @@ def build_details_keyboard(key_id, in_watchlist, context="search"):
     return InlineKeyboardMarkup(rows)
 
 
-async def send_imdb_details(client, chat_id, key_id, user_id=None, in_watchlist=None, context="search"):
+async def send_imdb_details(
+    client, chat_id, key_id, user_id=None,
+    in_watchlist=None, in_month_watched=None, context="search",
+):
     """Fetch full details for key_id and send a rich details message with
-    Poster, full info caption, and Watchlist / Search Another / Done
-    buttons.
+    Poster, full info caption, and Watchlist / This Month Watched /
+    Search Another / Done buttons.
 
-    `in_watchlist` controls which watchlist button is shown:
+    `in_watchlist` / `in_month_watched` each control which state their
+    button is shown in:
     - None (default): auto-detect by checking the database for `user_id`
       - this makes the button correct no matter where the details page was
         opened from, instead of trusting the caller to know.
     - True/False: explicit override, used by callers that already know the
-      answer (e.g. the Watchlist listing itself).
+      answer (e.g. the Watchlist / This Month Watched listings themselves).
 
     `context` is passed straight through to build_details_keyboard() - see
-    that function for what "search" vs "watchlist" changes.
+    that function for what "search" vs "watchlist" vs "month_watched"
+    changes.
     """
     details = await asyncio.to_thread(fetch_details, key_id)
 
@@ -144,7 +189,10 @@ async def send_imdb_details(client, chat_id, key_id, user_id=None, in_watchlist=
         # Auto-detect - falls back to False (Add) if we have no user_id to check.
         in_watchlist = await is_in_watchlist(user_id, key_id) if user_id else False
 
-    buttons = build_details_keyboard(key_id, in_watchlist, context=context)
+    if in_month_watched is None:
+        in_month_watched = await is_in_month_watched(user_id, key_id) if user_id else False
+
+    buttons = build_details_keyboard(key_id, in_watchlist, in_month_watched, context=context)
 
     try:
         if poster:
@@ -175,13 +223,17 @@ async def send_trending_details(client, chat_id, key_id, user_id=None):
     caption (whether the title is streaming anywhere yet, per TMDb's
     watch-providers data - see services/tmdb.py's get_ott_status_from_key()).
 
+    Also used for 🎬 Upcoming Movies and 🎲 Suggest a Movie details pages
+    (see plugins/callback.py).
+
     Trending results are always TMDb-sourced (services.tmdb.get_trending_tmdb()),
     so this always sends a NEW message (kept separate from
     send_imdb_details() rather than adding an `show_ott` flag there) and
-    always uses context="search" for the Watchlist button: Add/Delete
-    toggles in place on this message, and "✅ Done" only deletes this
-    message - the trending listing above it, and the watchlist, are both
-    left untouched, per the Trending Now spec.
+    always uses context="search" for the Watchlist / This Month Watched
+    buttons: Add/Delete toggles in place on this message, and "✅ Done"
+    only deletes this message - the trending listing above it, and the
+    watchlist / this month watched list, are both left untouched, per the
+    Trending Now spec.
     """
     details = await asyncio.to_thread(fetch_details, key_id)
 
@@ -201,8 +253,9 @@ async def send_trending_details(client, chat_id, key_id, user_id=None):
     poster = poster if poster and poster != "N/A" else None
 
     in_watchlist = await is_in_watchlist(user_id, key_id) if user_id else False
+    in_month_watched = await is_in_month_watched(user_id, key_id) if user_id else False
 
-    buttons = build_details_keyboard(key_id, in_watchlist, context="search")
+    buttons = build_details_keyboard(key_id, in_watchlist, in_month_watched, context="search")
 
     try:
         if poster:
@@ -229,8 +282,8 @@ async def send_trending_details(client, chat_id, key_id, user_id=None):
 
 async def send_imdb_details_inline(client, inline_message_id, key_id, user_id=None):
     """Edit an inline-inserted search-result card into the full details
-    page (poster + full info caption + Watchlist/Search Another/Done
-    buttons), in place, via its inline_message_id. Called from
+    page (poster + full info caption + Watchlist/This Month Watched/Search
+    Another/Done buttons), in place, via its inline_message_id. Called from
     plugins/inline.py's inline_result_chosen() for both SEARCH - IMDb and
     SEARCH - TMDb results.
     """
@@ -255,8 +308,9 @@ async def send_imdb_details_inline(client, inline_message_id, key_id, user_id=No
     caption = format_imdb_details(details, total_episodes=total_episodes)
 
     in_watchlist = await is_in_watchlist(user_id, key_id) if user_id else False
+    in_month_watched = await is_in_month_watched(user_id, key_id) if user_id else False
 
-    buttons = build_details_keyboard(key_id, in_watchlist, context="search")
+    buttons = build_details_keyboard(key_id, in_watchlist, in_month_watched, context="search")
 
     poster = details.get("Poster")
     poster = poster if poster and poster != "N/A" else None
