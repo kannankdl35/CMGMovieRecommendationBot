@@ -1,6 +1,13 @@
+# Location: plugins/start.py  (REPLACE ENTIRE FILE)
+
 from pyrogram import Client, filters
 
 from keyboards.home import home_keyboard
+
+# ✅ NEW - "This Month Watched" feature (Monthly Reset & Report): records
+# this user so the end-of-month report knows to message them, even if
+# their stats end up all zero for the month.
+from database.users_db import register_user
 
 print("✅ START PLUGIN LOADED")
 
@@ -9,6 +16,10 @@ print("✅ START PLUGIN LOADED")
 async def start_command(client, message):
 
     print("✅ /start COMMAND RECEIVED")
+
+    user = message.from_user
+    if user:
+        await register_user(user.id, username=user.username, first_name=user.first_name)
 
     text = (
         "👋 **Welcome to CMG Movie Recommendation Bot**\n\n"
@@ -19,7 +30,9 @@ async def start_command(client, message):
         "• 🔥 **TRENDING NOW** - what's trending today/this week on TMDb\n"
         "• 🎬 **UPCOMING MOVIES** - theatre & OTT releases by language\n"
         "• 🎲 **SUGGEST RANDOM MOVIE** - a random pick, 7+ rated with 500+ votes\n"
-        "• 📋 **WATCHLIST** - your saved titles\n\n"
+        "• 📋 **WATCHLIST** - your saved titles\n"
+        "• 🗓️ **THIS MONTH WATCHED** - track what you've watched this month "
+        "+ unlock achievements\n\n"
         "Click a button below to get started."
     )
 
