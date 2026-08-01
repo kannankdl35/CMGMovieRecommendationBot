@@ -9,6 +9,12 @@ from config import API_ID, API_HASH, BOT_TOKEN
 # every registered user their final status for the month that just ended.
 from services.monthly_report import monthly_watched_scheduler
 
+# ✅ NEW - Release Cache Scheduler: proactively re-scrapes "OTT Release
+# This Week" and re-fetches "Theatre Release" (all languages) twice a
+# day, instead of only refreshing lazily whenever a user happens to open
+# those menus after the cache goes stale.
+from services.release_scheduler import release_cache_scheduler
+
 app = Client(
     "CMGMovieRecommendationBot",
     api_id=API_ID,
@@ -28,6 +34,11 @@ async def main():
     # what lets this background task coexist with Pyrogram's own event
     # loop.
     asyncio.create_task(monthly_watched_scheduler(app))
+
+    # Refreshes "OTT Release This Week" and "Theatre Release" twice a day
+    # (see services/release_scheduler.py) so both lists update on a fixed
+    # schedule instead of only whenever a user happens to open the menu.
+    asyncio.create_task(release_cache_scheduler())
 
     await idle()
 
