@@ -16,8 +16,11 @@ from config import TMDB_API_KEY
 # case; this hasn't been separately verified live yet, so treat the first
 # real run as a test, same as everything else built this conversation.
 #
-# Cached per-language, refreshed at most once a day - see
-# get_cached_theatre_releases() below.
+# Cached per-language, refreshed at most once every CACHE_TTL_SECONDS - see
+# get_cached_theatre_releases() below. Same as services/ott_releases.py,
+# this cache is lazily refreshed on request, and is also pushed
+# proactively twice a day by services/release_scheduler.py (started in
+# bot.py) so the list updates on schedule regardless of traffic.
 # ---------------------------------------------------------------------------
 
 BASE_URL = "https://api.themoviedb.org/3"
@@ -38,7 +41,7 @@ LANGUAGE_CODES = {
 # "trending"/"popular", just genuinely upcoming.
 LOOKAHEAD_DAYS = 30
 
-CACHE_TTL_SECONDS = 24 * 60 * 60
+CACHE_TTL_SECONDS = 12 * 60 * 60  # twice a day
 
 _cache = {}  # lang -> {"data": [...], "fetched_at": <epoch seconds>}
 
@@ -95,8 +98,9 @@ def get_upcoming_theatre_releases(lang):
 
 
 def get_cached_theatre_releases(lang, force_refresh=False):
-    """Same once-a-day lazy-refresh pattern as
-    services.ott_releases.get_cached_ott_releases(), but keyed per
+    """Same lazy-refresh pattern as
+    services.ott_releases.get_cached_ott_releases() (12h TTL, pushed
+    proactively twice a day by release_scheduler.py), but keyed per
     language, since each language is a separate TMDb request here (unlike
     the OTT branch's single scraped page covering all regional languages
     at once).
