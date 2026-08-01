@@ -1,5 +1,3 @@
-# Location: bot.py  (REPLACE ENTIRE FILE)
-
 import asyncio
 
 from pyrogram import Client, idle
@@ -37,4 +35,11 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    # IMPORTANT: run on the SAME event loop the Client was constructed on
+    # (app.loop), not a new one from asyncio.run(). asyncio.run() creates
+    # a brand-new loop, which is different from the loop pyrogram bound
+    # its internal dispatcher/update-handling tasks to at Client()
+    # instantiation time above - running main() on the wrong loop meant
+    # incoming Telegram updates were never actually delivered to any
+    # handler, even though the client looked "connected" and healthy.
+    app.loop.run_until_complete(main())
