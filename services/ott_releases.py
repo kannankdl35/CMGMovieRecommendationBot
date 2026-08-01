@@ -51,21 +51,58 @@ CACHE_TTL_SECONDS = 12 * 60 * 60  # twice a day
 
 REQUIRED_FIELDS = {"release date", "ott platform", "language", "genre"}
 
+# How many regional languages a post's entries must collectively cover to
+# count as "the general roundup" rather than a single-language post (see
+# _looks_like_multi_language_roundup() below) - 3 of 5 leaves room for a
+# week where the roundup happens to be missing 1-2 languages while still
+# clearly not a Telugu-only/Hollywood-only post.
+MIN_LANGUAGES_FOR_ROUNDUP = 3
+
+# How many of the homepage's newest post links to check before giving up.
+# The general roundup is normally the 1st or 2nd link (Telugu-only and
+# English-only posts are interleaved with it), so this is generous
+# headroom without risking a slow/expensive scrape on every refresh.
+MAX_HOMEPAGE_CANDIDATES = 8
+
 _cache = {"data": None, "fetched_at": None}
 
 
-def _find_latest_india_post_url():
-    """The homepage lists posts newest-first, mixing general "India"
-    roundups (all regional languages together) with Telugu-only and
-    English/Hollywood-only posts. The general roundup's slug reliably
-    contains "india" - this returns the first (newest) matching link.
+def _iter_candidate_post_urls():
+    """Post links from the homepage, newest first, in the order the posts
+    themselves are listed - NOT header/footer navigation.
+
+    Previously this filtered by checking whether "india" appeared in the
+    URL slug - that broke the week the site published the general roundup
+    as "Upcoming OTT Releases this week July 27-Aug 1" (slug
+    "ott-releases-this-week-july-27-aug-1", no "india" in it at all),
+    silently falling back to the OLDER "...-in-india-..." post from the
+    previous week and showing a stale list. The site's title/slug wording
+    for the general roundup isn't consistent enough to key off of, so
+    instead this just returns candidates in homepage order and
+    get_weekly_regional_releases() below picks the first one whose actual
+    scraped CONTENT looks like the multi-language roundup.
+
+    Only links found inside an <h2> are considered - on this site every
+    actual post title in the homepage feed is wrapped in an <h2> (that's
+    how the "View Full List" post list renders), while the header/footer
+    nav (Blog, About us, Contact us, Privacy Policy, social links, the
+    site logo linking back to "/") is plain text/paragraph links, not
+    headings. Without this restriction those nav links would get treated
+    as "candidate posts" and checked (and wasted as failed HTTP requests)
+    before ever reaching the real posts.
     """
     response = requests.get(HOMEPAGE_URL, headers=HEADERS, timeout=15)
     response.raise_for_status()
     soup = BeautifulSoup(response.text, "html.parser")
 
     seen = set()
-    for link in soup.find_all("a", href=True):
+    urls = []
+
+    for heading in soup.find_all("h2"):
+        link = heading.find("a", href=True)
+        if not link:
+            continue
+
         href = link["href"]
         if href in seen:
             continue
@@ -75,12 +112,33 @@ def _find_latest_india_post_url():
             continue
         if "/category/" in href or "/tag/" in href:
             continue
+        if href.rstrip("/") == HOMEPAGE_URL.rstrip("/"):
+            continue
 
-        slug = href.rstrip("/").rsplit("/", 1)[-1].lower()
-        if "india" in slug:
-            return href
+        urls.append(href)
+        if len(urls) >= MAX_HOMEPAGE_CANDIDATES:
+            break
 
-    return None
+    return urls
+
+
+def _looks_like_multi_language_roundup(entries):
+    """True if these entries collectively cover at least
+    MIN_LANGUAGES_FOR_ROUNDUP of the 5 regional languages - this is what
+    actually distinguishes the general roundup post (every language mixed
+    together) from a single-language post like a Telugu-only or
+    English/Hollywood-only week, regardless of what the post happens to
+    be titled or slugged this particular week.
+    """
+    languages_seen = set()
+
+    for entry in entries:
+        language_field = entry.get("language", "").lower()
+        for lang in REGIONAL_LANGUAGES:
+            if lang in language_field:
+                languages_seen.add(lang)
+
+    return len(languages_seen) >= MIN_LANGUAGES_FOR_ROUNDUP
 
 
 def _parse_fields_from_list(ul_tag):
@@ -147,20 +205,33 @@ def get_weekly_regional_releases():
     Returns a dict keyed by language -> list of release entries. A
     pan-Indian release tagged with multiple languages appears in every
     matching language's list. Returns {} on any failure (site down,
-    layout changed, network error) - get_cached_ott_releases() below is
-    what actually protects users from that, by keeping serving the last
-    good cached copy instead.
+    layout changed, network error, no candidate post looked like a
+    roundup) - get_cached_ott_releases() below is what actually protects
+    users from that, by keeping serving the last good cached copy
+    instead.
     """
     try:
-        post_url = _find_latest_india_post_url()
-        if not post_url:
-            return {}
-
-        response = requests.get(post_url, headers=HEADERS, timeout=15)
-        response.raise_for_status()
-
-        entries = _extract_release_blocks(response.text)
+        candidate_urls = _iter_candidate_post_urls()
     except Exception:
+        return {}
+
+    entries = None
+
+    for post_url in candidate_urls:
+        try:
+            response = requests.get(post_url, headers=HEADERS, timeout=15)
+            response.raise_for_status()
+            candidate_entries = _extract_release_blocks(response.text)
+        except Exception:
+            # This particular post failed to fetch/parse - try the next
+            # newest candidate rather than giving up entirely.
+            continue
+
+        if _looks_like_multi_language_roundup(candidate_entries):
+            entries = candidate_entries
+            break
+
+    if entries is None:
         return {}
 
     by_language = {lang: [] for lang in REGIONAL_LANGUAGES}
