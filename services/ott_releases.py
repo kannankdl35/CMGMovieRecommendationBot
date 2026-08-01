@@ -22,10 +22,18 @@ from services.tmdb import search_titles_tmdb, get_weekly_english_releases
 #     release-type filter is dense and reliable for English/US, unlike the
 #     same filter's sparse results for Indian regional languages).
 #
-# get_cached_ott_releases() below refreshes this ONCE A DAY (lazily, on
-# first request after the cache goes stale) and serves every user from
-# that cached copy - so this has no per-request cost and no rate-limit
-# concern, unlike every commercial release-calendar API tested for this.
+# get_cached_ott_releases() below refreshes this at most every
+# CACHE_TTL_SECONDS and serves every user from that cached copy - so this
+# has no per-request cost and no rate-limit concern, unlike every
+# commercial release-calendar API tested for this.
+#
+# This is a LAZY refresh: it only re-scrapes when a request happens to
+# come in after the cache has gone stale. That's why it's also pushed
+# PROACTIVELY, twice a day, by services/release_scheduler.py (started in
+# bot.py) - so the list updates on schedule even if no user opens the
+# menu right when it goes stale. CACHE_TTL_SECONDS below matches that
+# scheduler's cadence, so this lazy path is just a safety net if the
+# background task ever dies.
 # ---------------------------------------------------------------------------
 
 HOMEPAGE_URL = "https://ottreleasesthisweek.com/"
@@ -39,7 +47,7 @@ HEADERS = {
 REGIONAL_LANGUAGES = ["malayalam", "tamil", "telugu", "kannada", "hindi"]
 ALL_LANGUAGES = REGIONAL_LANGUAGES + ["english"]
 
-CACHE_TTL_SECONDS = 24 * 60 * 60
+CACHE_TTL_SECONDS = 12 * 60 * 60  # twice a day
 
 REQUIRED_FIELDS = {"release date", "ott platform", "language", "genre"}
 
@@ -179,7 +187,8 @@ def _fetch_all():
 
 def get_cached_ott_releases(force_refresh=False):
     """Return this week's OTT releases for all 6 languages, refreshing at
-    most once every 24h. If a refresh attempt comes back completely empty
+    most once every CACHE_TTL_SECONDS (12h - see release_scheduler.py for
+    the proactive twice-daily push). If a refresh attempt comes back completely empty
     (site down, TMDb error) and there's already a previous good cache,
     that previous cache keeps being served rather than wiped out - a
     transient failure should degrade to "yesterday's list", not "no list".
