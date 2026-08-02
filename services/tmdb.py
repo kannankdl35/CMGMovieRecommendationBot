@@ -1,3 +1,4 @@
+
 import random
 from datetime import date, timedelta
 
@@ -21,6 +22,12 @@ from config import TMDB_API_KEY
 
 BASE_URL = "https://api.themoviedb.org/3"
 IMAGE_BASE_URL = "https://image.tmdb.org/t/p/w500"
+
+# Used only by fetch_posters_tmdb() below (⬇️ DOWNLOAD POSTERS feature) -
+# "original" is TMDb's highest-quality, unresized image size, as opposed to
+# the "w500" thumbnail size used everywhere else in this module for search
+# result cards / details pages.
+POSTER_ORIGINAL_BASE_URL = "https://image.tmdb.org/t/p/original"
 
 
 def _poster_url(path):
@@ -167,6 +174,77 @@ def get_details_tmdb(key_id):
     }
 
     return details
+
+
+# ---------------------------------------------------------------------------
+# ⬇️ DOWNLOAD POSTERS (see keyboards/home.py + plugins/inline.py +
+# plugins/posters.py)
+# ---------------------------------------------------------------------------
+
+
+def fetch_posters_tmdb(key_id):
+    """Fetch every poster TMDb has on file for a TMDb-sourced key_id
+    ("tmdb_movie_603" / "tmdb_tv_1396", built by search_titles_tmdb() above),
+    via TMDb's Images endpoint (/movie/{id}/images or /tv/{id}/images).
+
+    `include_image_language` is set to "null" (no dialogue text baked into
+    the artwork) plus a wide spread of language codes so this returns
+    posters uploaded in any language, not just the ones TMDb would show by
+    default (which is just the account/default language + untagged
+    images) - this bot has no reliable per-user "preferred poster
+    language" setting, and the feature spec calls for ALL available
+    posters, so cast as wide a net as TMDb's API allows in one request.
+
+    Returns a list of full-resolution poster URLs (TMDb's "original" image
+    size - the highest quality available, unlike the "w500" thumbnails
+    used for search cards / details pages elsewhere in this module),
+    ordered by TMDb's own vote/popularity ordering (highest first). Returns
+    [] if the id can't be parsed, the lookup 404s, the request fails, or
+    there simply are no posters on file.
+    """
+    try:
+        _, media_type, tmdb_id = key_id.split("_", 2)
+    except ValueError:
+        return []
+
+    endpoint = "tv" if media_type == "tv" else "movie"
+
+    try:
+        response = requests.get(
+            f"{BASE_URL}/{endpoint}/{tmdb_id}/images",
+            params={
+                "api_key": TMDB_API_KEY,
+                # Broad language net (see docstring above) so posters
+                # uploaded for any market come back, not just the
+                # default/untagged ones TMDb returns with no filter at all.
+                "include_image_language": (
+                    "en,null,ml,ta,te,hi,kn,ko,ja,zh,fr,de,es,it,pt,ru,ar,tr"
+                ),
+            },
+            timeout=8,
+        )
+        if response.status_code == 404:
+            return []
+        response.raise_for_status()
+        data = response.json()
+    except Exception:
+        return []
+
+    posters = data.get("posters") or []
+
+    # Highest-rated/most-relevant first, same ordering TMDb's own site uses.
+    posters.sort(key=lambda p: p.get("vote_average") or 0, reverse=True)
+
+    urls = []
+    seen_paths = set()
+    for poster in posters:
+        path = poster.get("file_path")
+        if not path or path in seen_paths:
+            continue
+        seen_paths.add(path)
+        urls.append(f"{POSTER_ORIGINAL_BASE_URL}{path}")
+
+    return urls
 
 
 # ---------------------------------------------------------------------------
