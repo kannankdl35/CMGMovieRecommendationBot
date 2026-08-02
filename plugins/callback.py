@@ -66,6 +66,10 @@ from plugins.details import (
     build_details_keyboard,    # shared Watchlist/This Month Watched/Search Another/Done keyboard builder
 )
 
+# ⬇️ DOWNLOAD POSTERS - fetch-and-send-all-posters helper (see
+# plugins/posters.py + plugins/inline.py + keyboards/home.py).
+from plugins.posters import send_posters
+
 
 HOME_TEXT = (
     "👋 **Welcome to CMG Movie Recommendation Bot**\n\n"
@@ -524,6 +528,46 @@ async def callback_handler(client: Client, callback: CallbackQuery):
                     pass
 
         await send_imdb_details(client, chat_id, imdb_id, user_id=user_id)
+
+        await callback.answer()
+        return
+
+    # ---------------- DOWNLOAD POSTERS RESULT SELECTED ----------------
+    # Fallback for when inline feedback isn't enabled for the bot - fires
+    # when the user taps "⬇️ Download Posters" on a card sent from a
+    # ⬇️ DOWNLOAD POSTERS inline search result (plugins/inline.py). Mirrors
+    # the "sr_" / View Details branch above, except it fetches every
+    # poster on file for the title instead of opening the details page -
+    # no details, no captions, no extra buttons on the posters themselves,
+    # see plugins/posters.py's send_posters().
+
+    if data.startswith("dp_"):
+
+        key_id = data.replace("dp_", "", 1)
+
+        chat_id = callback.message.chat.id if callback.message else callback.from_user.id
+
+        if callback.message:
+            try:
+                await callback.message.delete()
+            except Exception:
+                pass
+        elif callback.inline_message_id:
+            try:
+                await client.edit_inline_text(
+                    inline_message_id=callback.inline_message_id,
+                    text="✅ Fetching posters below.",
+                )
+            except Exception:
+                try:
+                    await client.edit_inline_caption(
+                        inline_message_id=callback.inline_message_id,
+                        caption="✅ Fetching posters below.",
+                    )
+                except Exception:
+                    pass
+
+        await send_posters(client, chat_id, key_id)
 
         await callback.answer()
         return
