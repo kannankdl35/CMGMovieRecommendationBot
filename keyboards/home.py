@@ -4,23 +4,34 @@ from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 
 def home_keyboard():
-    """The Home menu has seven buttons:
+    """The Home menu has eight buttons:
 
       1. 🔍 SEARCH - IMDb
       2. 🔍 SEARCH - TMDb
-      3. 🔥 TRENDING NOW
-      4. 🎬 UPCOMING MOVIES
-      5. 🎲 SUGGEST RANDOM MOVIE
-      6. 📋 WATCHLIST
-      7. 🗓️ THIS MONTH WATCHED
+      3. ⬇️ DOWNLOAD POSTERS
+      4. 🔥 TRENDING NOW
+      5. 🎬 UPCOMING MOVIES
+      6. 🎲 SUGGEST RANDOM MOVIE
+      7. 📋 WATCHLIST
+      8. 🗓️ THIS MONTH WATCHED
 
-    Both search buttons use Telegram Inline Mode, same as the old
-    "Find Movies & Series" button - switch_inline_query_current_chat
-    pre-fills "@<BotUsername> imdb " / "@<BotUsername> tmdb " into this
-    chat's message box. The leading "imdb "/"tmdb " word is how
-    plugins/inline.py's single inline-query handler tells which backend to
-    search (services.imdb vs services.tmdb) - Telegram doesn't otherwise
-    report which button was tapped, only the text the user ends up typing.
+    All three of the first buttons use Telegram Inline Mode, same as the
+    old "Find Movies & Series" button - switch_inline_query_current_chat
+    pre-fills "@<BotUsername> imdb " / "@<BotUsername> tmdb " /
+    "@<BotUsername> posters " into this chat's message box. The leading
+    "imdb "/"tmdb "/"posters " word is how plugins/inline.py's single
+    inline-query handler tells which backend to search and what to do once
+    a result is picked (services.imdb vs services.tmdb, and full details
+    page vs posters-only) - Telegram doesn't otherwise report which button
+    was tapped, only the text the user ends up typing.
+
+    ✅ "⬇️ DOWNLOAD POSTERS" (switch_inline_query_current_chat="posters ")
+    reuses the exact same inline search workflow as "🔍 SEARCH - TMDb"
+    (type a title, tap a result) but skips the details page entirely -
+    picking a result fetches every poster TMDb has on file for that title
+    (services/tmdb.py's fetch_posters_tmdb()) and sends them as plain
+    images, with no caption, no buttons, and no other title info. See
+    plugins/inline.py and plugins/posters.py.
 
     "🔥 Trending Now" (callback_data="trending_open") opens the
     Today / This Week / Home selection page (keyboards/trending.py),
@@ -61,6 +72,12 @@ def home_keyboard():
                 InlineKeyboardButton(
                     "🔍 SEARCH - TMDb",
                     switch_inline_query_current_chat="tmdb "
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "⬇️ DOWNLOAD POSTERS",
+                    switch_inline_query_current_chat="posters "
                 )
             ],
             [
