@@ -15,7 +15,6 @@ from services.imdb import search_titles
 from services.tmdb import search_titles_tmdb
 
 from plugins.details import send_imdb_details_inline
-from plugins.posters import send_posters
 
 # Telegram allows up to 50 inline results per answer; capped lower to keep
 # results relevant and responses fast.
@@ -184,17 +183,24 @@ async def inline_result_chosen(client: Client, chosen: ChosenInlineResult):
     no separate "View Details" tap required.
 
     For ⬇️ DOWNLOAD POSTERS results (result id carries POSTERS_ID_PREFIX,
-    see the loop above): leaves that card as-is and instead fetches every
-    poster on file for the title and sends them as plain images directly
-    to the user's chat with the bot (no details page, no captions, no
-    buttons) - see plugins/posters.py's send_posters().
+    see the loop above): does NOT auto-send anything here. The card stays
+    exactly as inserted - poster thumbnail + title/year caption + the
+    "⬇️ Download Posters" button - and posters are only fetched and sent
+    once the user actually taps that button (handled entirely by
+    plugins/callback.py's "dp_" branch, which calls
+    plugins/posters.py's send_posters()). This is the ONLY path that
+    sends posters for this feature; being "chosen" from the inline result
+    list is just how the card with the button gets into the chat, it's
+    not itself a request to download anything yet.
 
     IMPORTANT: this requires inline feedback to be enabled for the bot -
     in @BotFather run /setinlinefeedback, pick this bot, and set it to
     100%. Without that, Telegram will not reliably report chosen results
-    and this handler won't fire (the "ℹ️ View Details" / "⬇️ Download
-    Posters" button on the card stays as the fallback in that case - see
-    plugins/callback.py's "sr_"/"dp_" branches).
+    and this handler won't fire at all for SEARCH - IMDb / SEARCH - TMDb
+    (the "ℹ️ View Details" button on the card stays as the fallback in
+    that case, same as always - see plugins/callback.py's "sr_" branch).
+    DOWNLOAD POSTERS results are unaffected either way, since they never
+    act on the chosen-result event in the first place.
     """
     # The result id was set to the title's item_id (IMDb id or TMDb key),
     # or POSTERS_ID_PREFIX + that key for a DOWNLOAD POSTERS result, when
@@ -207,20 +213,13 @@ async def inline_result_chosen(client: Client, chosen: ChosenInlineResult):
     if not result_id or not chosen.inline_message_id:
         return
 
-    user_id = chosen.from_user.id if chosen.from_user else None
-
+    # ⬇️ DOWNLOAD POSTERS results: nothing to do here - see docstring
+    # above. Posters are sent only when the "⬇️ Download Posters" button
+    # is tapped (plugins/callback.py's "dp_" branch).
     if result_id.startswith(POSTERS_ID_PREFIX):
-        item_id = result_id[len(POSTERS_ID_PREFIX):]
-
-        # Private chat with the bot: chat id == user id, same assumption
-        # plugins/callback.py's "sr_"/"dp_" fallback branches make when
-        # there's no callback.message to read a chat id from.
-        chat_id = chosen.from_user.id if chosen.from_user else None
-        if not chat_id:
-            return
-
-        await send_posters(client, chat_id, item_id)
         return
+
+    user_id = chosen.from_user.id if chosen.from_user else None
 
     await send_imdb_details_inline(
         client, chosen.inline_message_id, result_id, user_id=user_id
