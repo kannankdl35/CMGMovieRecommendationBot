@@ -63,8 +63,14 @@ def build_details_keyboard(
     key_id, in_watchlist, in_month_watched=False, context="search", show_home=False
 ):
     """Build the Watchlist (Add or Delete) / This Month Watched (Add or
-    Delete) / Search Another / Done (+ optional Home) inline keyboard shown
+    Delete) / Done (+ optional Search Another / Home) inline keyboard shown
     under a details page.
+
+    "🔎 Search Another Movie/Series" is ONLY included when show_home=True,
+    i.e. only for details pages opened from the SEARCH - IMDb / SEARCH -
+    TMDb inline search results - see the show_home docstring below. It is
+    never shown for 🔥 Trending Now, 🎬 Upcoming Movies, 🎲 Suggest Random
+    Movie, the Watchlist listing, or the This Month Watched listing.
 
     `show_home` controls an extra "🏠 Home" button placed in the SAME ROW as
     "✅ Done" (per the requested layout). This is ONLY turned on for details
@@ -127,11 +133,12 @@ def build_details_keyboard(
           the This Month Watched listing.
         * Watchlist button still behaves like "search" (in place).
 
-    "🔎 Search Another Movie/Series" pre-fills "imdb "/"tmdb " into the
-    chat's inline query box (same mechanic as the Home menu's two search
-    buttons, see keyboards/home.py) - always for the SAME source this
-    title came from, based on whether key_id has a "tmdb_" prefix, so
-    tapping it continues searching on the same site as the last result.
+    "🔎 Search Another Movie/Series" (only shown when show_home=True - see
+    above) pre-fills "imdb "/"tmdb " into the chat's inline query box (same
+    mechanic as the Home menu's two search buttons, see keyboards/home.py)
+    - always for the SAME source this title came from, based on whether
+    key_id has a "tmdb_" prefix, so tapping it continues searching on the
+    same site as the last result.
 
     The "✅ Done" button (callback_data "done") is shown for every context.
     Tapping it only dismisses/clears that details message; it never
@@ -185,14 +192,27 @@ def build_details_keyboard(
     rows = [
         [watchlist_button],
         [month_watched_button],
-        [
-            InlineKeyboardButton(
-                "🔎 Search Another Movie/Series",
-                switch_inline_query_current_chat=f"{mode} ",
-            )
-        ],
-        last_row,
     ]
+
+    # "🔎 Search Another Movie/Series" is only relevant for details pages
+    # opened from the SEARCH - IMDb / SEARCH - TMDb inline search results,
+    # which are the only callers that pass show_home=True (see the
+    # docstring above and plugins/callback.py's "sr_" fallback branch /
+    # plugins/inline.py's inline_result_chosen()). Every other feature
+    # (🔥 Trending Now, 🎬 Upcoming Movies, 🎲 Suggest Random Movie, the
+    # Watchlist listing, the This Month Watched listing) never passes
+    # show_home=True, so they never get this button.
+    if show_home:
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    "🔎 Search Another Movie/Series",
+                    switch_inline_query_current_chat=f"{mode} ",
+                )
+            ]
+        )
+
+    rows.append(last_row)
 
     return InlineKeyboardMarkup(rows)
 
