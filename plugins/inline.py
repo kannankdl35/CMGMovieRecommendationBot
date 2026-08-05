@@ -28,6 +28,47 @@ INLINE_RESULT_LIMIT = 20
 # ("tmdb_movie_603" / "tmdb_tv_1396") is otherwise identical either way.
 POSTERS_ID_PREFIX = "dp_"
 
+# ---------------------------------------------------------------------------
+# STALE-ANSWER GUARD
+#
+# Telegram fires a fresh inline query on every keystroke (typing "Kuruvi"
+# can send separate query events for "K", "Ku", "Kur", ... "Kuruvi"), and
+# each one triggers its own network call to the search API below. Those
+# calls don't necessarily finish in the order they were sent - if an
+# earlier, shorter query (e.g. "Kur") happens to resolve to zero results
+# and its answer reaches Telegram AFTER the answer for the final, real
+# query ("Kuruvi", which does have matches), Telegram displays that
+# leftover "❌ No Results Found" switch_pm banner stacked on top of the
+# already-shown real results.
+#
+# Fix: remember only the LATEST query event per user. Right before actually
+# answering, check whether a newer query has since come in for that same
+# user - if so, this answer is stale (a fresher one is already on the way,
+# or already landed) and is dropped instead of being sent, so an old
+# "no results" (or old results) answer can never appear after a newer one.
+# ---------------------------------------------------------------------------
+_latest_query_token = {}  # user_id -> opaque token identifying their latest query
+
+
+def _start_query(user_id):
+    """Register a new inline query as the latest for this user and return
+    its token. Pass user_id=None (no from_user on the event) to skip
+    tracking entirely - the staleness check below then always passes."""
+    if user_id is None:
+        return None
+    token = object()
+    _latest_query_token[user_id] = token
+    return token
+
+
+def _is_stale(user_id, token):
+    """True if a newer inline query has arrived for this user since
+    `token` was issued - meaning this in-flight search's answer should be
+    dropped rather than sent to Telegram."""
+    if user_id is None:
+        return False
+    return _latest_query_token.get(user_id) is not token
+
 
 def _parse_mode(raw_query):
     """The Home menu's search/posters buttons (keyboards/home.py) pre-fill
@@ -70,6 +111,9 @@ async def inline_search_handler(client: Client, inline_query: InlineQuery):
     below) - the 'ℹ️ View Details' button is a fallback for when inline
     feedback isn't enabled for the bot.
     """
+    user_id = inline_query.from_user.id if inline_query.from_user else None
+    token = _start_query(user_id)
+
     mode, query = _parse_mode(inline_query.query)
 
     if not query:
@@ -87,6 +131,15 @@ async def inline_search_handler(client: Client, inline_query: InlineQuery):
     # Blocking HTTP request - run off the event loop so the bot can keep
     # handling other updates while it's in flight.
     results_data = await asyncio.to_thread(search_fn, query)
+
+    # A newer keystroke's query has since come in for this user - a fresher
+    # answer is already on its way (or already landed), so don't send this
+    # one. Without this check, a "no results" answer for an earlier, shorter
+    # query text can land after the real results for what the user has
+    # since finished typing, and Telegram shows both stacked together (the
+    # "❌ No Results Found" banner sitting on top of real results).
+    if _is_stale(user_id, token):
+        return
 
     if not results_data:
         # ✅ Simple, unambiguous message when nothing matches - shown as
@@ -166,6 +219,12 @@ async def inline_search_handler(client: Client, inline_query: InlineQuery):
                 )
             )
 
+    # Same staleness check as above, re-tested since the loop building
+    # `answers` (and the earlier search call) both took real time - a newer
+    # query could have arrived in the meantime.
+    if _is_stale(user_id, token):
+        return
+
     await inline_query.answer(
         results=answers,
         cache_time=30,
@@ -223,4 +282,4 @@ async def inline_result_chosen(client: Client, chosen: ChosenInlineResult):
 
     await send_imdb_details_inline(
         client, chosen.inline_message_id, result_id, user_id=user_id
-    )
+            )
