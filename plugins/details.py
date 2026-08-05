@@ -5,7 +5,7 @@ import asyncio
 # IMDb + TMDb detail lookup & formatter, used by both search flows
 # (SEARCH - IMDb / SEARCH - TMDb) and by the Watchlist / This Month Watched.
 from services.imdb import get_details, get_series_episode_count
-from services.tmdb import get_details_tmdb, get_ott_status_from_key
+from services.tmdb import get_details_tmdb
 from utils.formatter import format_imdb_details
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
@@ -292,9 +292,7 @@ async def send_imdb_details(
 
 async def send_trending_details(client, chat_id, key_id, user_id=None):
     """🔥 Trending Now details view - same details page as
-    send_imdb_details(), plus an "OTT Release Status" line appended to the
-    caption (whether the title is streaming anywhere yet, per TMDb's
-    watch-providers data - see services/tmdb.py's get_ott_status_from_key()).
+    send_imdb_details().
 
     Also used for 🎬 Upcoming Movies and 🎲 Suggest a Movie details pages
     (see plugins/callback.py).
@@ -322,9 +320,6 @@ async def send_trending_details(client, chat_id, key_id, user_id=None):
 
     total_episodes = _total_episodes(key_id, details)
     caption = format_imdb_details(details, total_episodes=total_episodes)
-
-    ott_status = await asyncio.to_thread(get_ott_status_from_key, key_id)
-    caption += f"\n\n📡 **OTT Release Status**\n{ott_status}"
 
     poster = details.get("Poster")
     poster = poster if poster and poster != "N/A" else None
