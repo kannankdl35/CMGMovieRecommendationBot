@@ -59,10 +59,42 @@ def _total_episodes(key_id, details):
     return get_series_episode_count(key_id, details.get("totalSeasons"))
 
 
-def build_details_keyboard(key_id, in_watchlist, in_month_watched=False, context="search"):
+def build_details_keyboard(
+    key_id, in_watchlist, in_month_watched=False, context="search", show_home=False
+):
     """Build the Watchlist (Add or Delete) / This Month Watched (Add or
-    Delete) / Search Another / Done inline keyboard shown under a details
-    page.
+    Delete) / Search Another / Done (+ optional Home) inline keyboard shown
+    under a details page.
+
+    `show_home` controls an extra "🏠 Home" button placed in the SAME ROW as
+    "✅ Done" (per the requested layout). This is ONLY turned on for details
+    pages opened from the SEARCH - IMDb / SEARCH - TMDb inline search
+    results (see send_imdb_details_inline() below, and the "sr_" fallback
+    branch in plugins/callback.py) - NOT for 🔥 Trending Now, 🎬 Upcoming
+    Movies, 🎲 Suggest Random Movie, the Watchlist listing, or the This
+    Month Watched listing, which never pass show_home=True.
+
+    Tapping "🏠 Home" fires callback_data "home_from_search" (handled in
+    plugins/callback.py), which closes this details message and sends a
+    fresh Home menu message - deliberately a different callback_data than
+    the plain-text listing pages' "back_home" button (keyboards/trending.py,
+    keyboards/upcoming.py, keyboards/random_movies.py, keyboards/watchlist.py,
+    keyboards/month_watched.py), since THIS details message is very often a
+    photo (poster + caption) rather than plain text, so it can't just be
+    edited in place into the Home menu text the way those listing pages are.
+
+    Because tapping "❤️ Add to Watchlist" / "🗑 Delete from Watchlist" /
+    "➕ Add to This Month Watched" / "➖ Delete from This Month Watched"
+    rebuilds this same keyboard IN PLACE (see the addwl_/rmwl_/addmw_/rmmw_
+    branches in plugins/callback.py), whether the Home button should still
+    be there after one of those taps has to survive the round trip. Since
+    Telegram only reports callback_data (not which context the message was
+    built with), this is encoded directly in those four buttons'
+    callback_data with a trailing "h" marker on the action name whenever
+    show_home is True (e.g. "addwlh_<key_id>" instead of "addwl_<key_id>") -
+    plugins/callback.py checks for both the plain and "h"-suffixed forms of
+    each action and reconstructs the keyboard with the same show_home value
+    either way.
 
     `context` controls how BOTH toggle buttons behave once tapped:
 
@@ -104,9 +136,16 @@ def build_details_keyboard(key_id, in_watchlist, in_month_watched=False, context
     The "✅ Done" button (callback_data "done") is shown for every context.
     Tapping it only dismisses/clears that details message; it never
     touches the saved watchlist or this-month-watched entries themselves.
+    When show_home is True, "🏠 Home" (callback_data "home_from_search")
+    sits in the SAME ROW, right next to "✅ Done".
 
     All of these callback_data values are handled in plugins/callback.py.
     """
+    # "h" marker carried on the toggle buttons' callback_data so a later
+    # add/remove tap (handled in plugins/callback.py) knows to rebuild this
+    # keyboard with the same show_home value - see the docstring above.
+    home_marker = "h" if show_home else ""
+
     if in_watchlist:
         if context == "watchlist":
             watchlist_button = InlineKeyboardButton(
@@ -114,11 +153,11 @@ def build_details_keyboard(key_id, in_watchlist, in_month_watched=False, context
             )
         else:
             watchlist_button = InlineKeyboardButton(
-                "🗑 Delete from Watchlist", callback_data=f"rmwl_{key_id}"
+                "🗑 Delete from Watchlist", callback_data=f"rmwl{home_marker}_{key_id}"
             )
     else:
         watchlist_button = InlineKeyboardButton(
-            "❤️ Add to Watchlist", callback_data=f"addwl_{key_id}"
+            "❤️ Add to Watchlist", callback_data=f"addwl{home_marker}_{key_id}"
         )
 
     if in_month_watched:
@@ -128,14 +167,20 @@ def build_details_keyboard(key_id, in_watchlist, in_month_watched=False, context
             )
         else:
             month_watched_button = InlineKeyboardButton(
-                "➖ Delete from This Month Watched", callback_data=f"rmmw_{key_id}"
+                "➖ Delete from This Month Watched", callback_data=f"rmmw{home_marker}_{key_id}"
             )
     else:
         month_watched_button = InlineKeyboardButton(
-            "➕ Add to This Month Watched", callback_data=f"addmw_{key_id}"
+            "➕ Add to This Month Watched", callback_data=f"addmw{home_marker}_{key_id}"
         )
 
     mode = _source_mode(key_id)
+
+    last_row = [InlineKeyboardButton("✅ Done", callback_data="done")]
+    if show_home:
+        last_row.append(
+            InlineKeyboardButton("🏠 Home", callback_data="home_from_search")
+        )
 
     rows = [
         [watchlist_button],
@@ -146,7 +191,7 @@ def build_details_keyboard(key_id, in_watchlist, in_month_watched=False, context
                 switch_inline_query_current_chat=f"{mode} ",
             )
         ],
-        [InlineKeyboardButton("✅ Done", callback_data="done")],
+        last_row,
     ]
 
     return InlineKeyboardMarkup(rows)
@@ -154,11 +199,11 @@ def build_details_keyboard(key_id, in_watchlist, in_month_watched=False, context
 
 async def send_imdb_details(
     client, chat_id, key_id, user_id=None,
-    in_watchlist=None, in_month_watched=None, context="search",
+    in_watchlist=None, in_month_watched=None, context="search", show_home=False,
 ):
     """Fetch full details for key_id and send a rich details message with
     Poster, full info caption, and Watchlist / This Month Watched /
-    Search Another / Done buttons.
+    Search Another / Done (+ optional Home) buttons.
 
     `in_watchlist` / `in_month_watched` each control which state their
     button is shown in:
@@ -171,6 +216,12 @@ async def send_imdb_details(
     `context` is passed straight through to build_details_keyboard() - see
     that function for what "search" vs "watchlist" vs "month_watched"
     changes.
+
+    `show_home` is also passed straight through to build_details_keyboard()
+    - only the "sr_" fallback branch in plugins/callback.py (SEARCH - IMDb
+    / SEARCH - TMDb "ℹ️ View Details" tap) passes show_home=True; every
+    other caller leaves it False, per the "only in the IMDb/TMDb search
+    result" requirement.
     """
     details = await asyncio.to_thread(fetch_details, key_id)
 
@@ -192,7 +243,9 @@ async def send_imdb_details(
     if in_month_watched is None:
         in_month_watched = await is_in_month_watched(user_id, key_id) if user_id else False
 
-    buttons = build_details_keyboard(key_id, in_watchlist, in_month_watched, context=context)
+    buttons = build_details_keyboard(
+        key_id, in_watchlist, in_month_watched, context=context, show_home=show_home
+    )
 
     try:
         if poster:
@@ -233,7 +286,11 @@ async def send_trending_details(client, chat_id, key_id, user_id=None):
     buttons: Add/Delete toggles in place on this message, and "✅ Done"
     only deletes this message - the trending listing above it, and the
     watchlist / this month watched list, are both left untouched, per the
-    Trending Now spec.
+    Trending Now spec. Deliberately never passes show_home=True - the
+    "🏠 Home" button is reserved for SEARCH - IMDb / SEARCH - TMDb results
+    only (see build_details_keyboard()'s docstring), so 🔥 Trending Now /
+    🎬 Upcoming Movies / 🎲 Suggest Random Movie details pages keep their
+    existing "⬅ Back" / language-menu navigation instead.
     """
     details = await asyncio.to_thread(fetch_details, key_id)
 
@@ -283,9 +340,14 @@ async def send_trending_details(client, chat_id, key_id, user_id=None):
 async def send_imdb_details_inline(client, inline_message_id, key_id, user_id=None):
     """Edit an inline-inserted search-result card into the full details
     page (poster + full info caption + Watchlist/This Month Watched/Search
-    Another/Done buttons), in place, via its inline_message_id. Called from
-    plugins/inline.py's inline_result_chosen() for both SEARCH - IMDb and
-    SEARCH - TMDb results.
+    Another/Done/Home buttons), in place, via its inline_message_id. Called
+    from plugins/inline.py's inline_result_chosen() for both SEARCH - IMDb
+    and SEARCH - TMDb results.
+
+    Always passes show_home=True to build_details_keyboard() - this is one
+    of the two entry points for the actual SEARCH - IMDb / SEARCH - TMDb
+    flow (the other being the "sr_" fallback branch in
+    plugins/callback.py), so the "🏠 Home" button belongs here.
     """
     details = await asyncio.to_thread(fetch_details, key_id)
 
@@ -310,7 +372,9 @@ async def send_imdb_details_inline(client, inline_message_id, key_id, user_id=No
     in_watchlist = await is_in_watchlist(user_id, key_id) if user_id else False
     in_month_watched = await is_in_month_watched(user_id, key_id) if user_id else False
 
-    buttons = build_details_keyboard(key_id, in_watchlist, in_month_watched, context="search")
+    buttons = build_details_keyboard(
+        key_id, in_watchlist, in_month_watched, context="search", show_home=True
+    )
 
     poster = details.get("Poster")
     poster = poster if poster and poster != "N/A" else None
