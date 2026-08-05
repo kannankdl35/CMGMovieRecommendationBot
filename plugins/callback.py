@@ -135,6 +135,49 @@ async def callback_handler(client: Client, callback: CallbackQuery):
         await callback.answer()
         return
 
+    # ---------------- HOME (from a SEARCH - IMDb / SEARCH - TMDb result) ----------------
+    # Fired from the "🏠 Home" button that only appears on SEARCH - IMDb /
+    # SEARCH - TMDb details pages (callback_data="home_from_search", see
+    # plugins/details.py's build_details_keyboard()). Unlike "back_home"
+    # above, this details message is very often a photo (poster + caption)
+    # rather than plain text, so it can't just be edited in place into the
+    # Home menu text - instead this deletes/clears the details message
+    # (same delete-then-resend pattern as "watchlist_open" /
+    # "month_watched_open" below) and sends a fresh Home menu message.
+
+    if data == "home_from_search":
+
+        chat_id = callback.message.chat.id if callback.message else callback.from_user.id
+
+        if callback.message:
+            try:
+                await callback.message.delete()
+            except Exception:
+                pass
+        elif callback.inline_message_id:
+            try:
+                await client.edit_inline_text(
+                    inline_message_id=callback.inline_message_id,
+                    text="🏠 Returned to Home.",
+                )
+            except Exception:
+                try:
+                    await client.edit_inline_caption(
+                        inline_message_id=callback.inline_message_id,
+                        caption="🏠 Returned to Home.",
+                    )
+                except Exception:
+                    pass
+
+        await client.send_message(
+            chat_id=chat_id,
+            text=HOME_TEXT,
+            reply_markup=home_keyboard()
+        )
+
+        await callback.answer()
+        return
+
     # ---------------- 🔥 TRENDING NOW: MENU ----------------
     # Fired from the main menu's "🔥 Trending Now" button
     # (callback_data="trending_open", see keyboards/home.py). Shows the
@@ -527,7 +570,10 @@ async def callback_handler(client: Client, callback: CallbackQuery):
                 except Exception:
                     pass
 
-        await send_imdb_details(client, chat_id, imdb_id, user_id=user_id)
+        # SEARCH - IMDb / SEARCH - TMDb result -> show_home=True so the
+        # "🏠 Home" button appears next to "✅ Done" (see
+        # plugins/details.py's build_details_keyboard() docstring).
+        await send_imdb_details(client, chat_id, imdb_id, user_id=user_id, show_home=True)
 
         await callback.answer()
         return
@@ -602,9 +648,15 @@ async def callback_handler(client: Client, callback: CallbackQuery):
 
     # ---------------- ADD TO WATCHLIST ----------------
 
-    if data.startswith("addwl_"):
+    if data.startswith("addwl_") or data.startswith("addwlh_"):
 
-        imdb_id = data.replace("addwl_", "", 1)
+        # "addwlh_" marks a details page that has the "🏠 Home" button
+        # (SEARCH - IMDb / SEARCH - TMDb results only, see
+        # plugins/details.py's build_details_keyboard() docstring) - the
+        # rebuilt keyboard below must keep show_home the same either way.
+        show_home = data.startswith("addwlh_")
+        prefix = "addwlh_" if show_home else "addwl_"
+        imdb_id = data[len(prefix):]
 
         details = await asyncio.to_thread(fetch_details, imdb_id)
 
@@ -629,7 +681,8 @@ async def callback_handler(client: Client, callback: CallbackQuery):
         in_month_watched = await is_in_month_watched(user_id, imdb_id)
 
         new_markup = build_details_keyboard(
-            imdb_id, in_watchlist=True, in_month_watched=in_month_watched, context="search"
+            imdb_id, in_watchlist=True, in_month_watched=in_month_watched,
+            context="search", show_home=show_home,
         )
 
         if callback.message:
@@ -654,16 +707,19 @@ async def callback_handler(client: Client, callback: CallbackQuery):
 
     # ---------------- REMOVE FROM WATCHLIST, IN PLACE ----------------
 
-    if data.startswith("rmwl_"):
+    if data.startswith("rmwl_") or data.startswith("rmwlh_"):
 
-        imdb_id = data.replace("rmwl_", "", 1)
+        show_home = data.startswith("rmwlh_")
+        prefix = "rmwlh_" if show_home else "rmwl_"
+        imdb_id = data[len(prefix):]
 
         await remove_from_watchlist(user_id, imdb_id)
 
         in_month_watched = await is_in_month_watched(user_id, imdb_id)
 
         new_markup = build_details_keyboard(
-            imdb_id, in_watchlist=False, in_month_watched=in_month_watched, context="search"
+            imdb_id, in_watchlist=False, in_month_watched=in_month_watched,
+            context="search", show_home=show_home,
         )
 
         if callback.message:
@@ -807,9 +863,11 @@ async def callback_handler(client: Client, callback: CallbackQuery):
 
     # ---------------- ADD TO THIS MONTH WATCHED ----------------
 
-    if data.startswith("addmw_"):
+    if data.startswith("addmw_") or data.startswith("addmwh_"):
 
-        imdb_id = data.replace("addmw_", "", 1)
+        show_home = data.startswith("addmwh_")
+        prefix = "addmwh_" if show_home else "addmw_"
+        imdb_id = data[len(prefix):]
 
         details = await asyncio.to_thread(fetch_details, imdb_id)
 
@@ -824,7 +882,8 @@ async def callback_handler(client: Client, callback: CallbackQuery):
         in_watchlist = await is_in_watchlist(user_id, imdb_id)
 
         new_markup = build_details_keyboard(
-            imdb_id, in_watchlist=in_watchlist, in_month_watched=True, context="search"
+            imdb_id, in_watchlist=in_watchlist, in_month_watched=True,
+            context="search", show_home=show_home,
         )
 
         if callback.message:
@@ -849,16 +908,19 @@ async def callback_handler(client: Client, callback: CallbackQuery):
 
     # ---------------- REMOVE FROM THIS MONTH WATCHED, IN PLACE ----------------
 
-    if data.startswith("rmmw_"):
+    if data.startswith("rmmw_") or data.startswith("rmmwh_"):
 
-        imdb_id = data.replace("rmmw_", "", 1)
+        show_home = data.startswith("rmmwh_")
+        prefix = "rmmwh_" if show_home else "rmmw_"
+        imdb_id = data[len(prefix):]
 
         await remove_from_month_watched(user_id, imdb_id)
 
         in_watchlist = await is_in_watchlist(user_id, imdb_id)
 
         new_markup = build_details_keyboard(
-            imdb_id, in_watchlist=in_watchlist, in_month_watched=False, context="search"
+            imdb_id, in_watchlist=in_watchlist, in_month_watched=False,
+            context="search", show_home=show_home,
         )
 
         if callback.message:
