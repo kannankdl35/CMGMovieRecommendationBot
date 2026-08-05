@@ -96,7 +96,7 @@ async def inline_search_handler(client: Client, inline_query: InlineQuery):
             results=[],
             cache_time=1,
             is_personal=True,
-            switch_pm_text="No Results Found ❌",
+            switch_pm_text="❌ No Results Found",
             switch_pm_parameter="start",
         )
         return
