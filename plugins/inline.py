@@ -29,7 +29,7 @@ INLINE_RESULT_LIMIT = 20
 POSTERS_ID_PREFIX = "dp_"
 
 # ---------------------------------------------------------------------------
-# STALE-ANSWER GUARD
+# STALE-ANSWER GUARD + DEBOUNCE
 #
 # Telegram fires a fresh inline query on every keystroke (typing "Kuruvi"
 # can send separate query events for "K", "Ku", "Kur", ... "Kuruvi"), and
@@ -41,12 +41,19 @@ POSTERS_ID_PREFIX = "dp_"
 # leftover "❌ No Results Found" switch_pm banner stacked on top of the
 # already-shown real results.
 #
-# Fix: remember only the LATEST query event per user. Right before actually
-# answering, check whether a newer query has since come in for that same
-# user - if so, this answer is stale (a fresher one is already on the way,
-# or already landed) and is dropped instead of being sent, so an old
-# "no results" (or old results) answer can never appear after a newer one.
+# Fix: remember only the LATEST query event per user, and make EVERY query
+# (including the empty-query "type a title" prompt, which used to answer
+# instantly with no wait at all) sit through a short DEBOUNCE_SECONDS pause
+# before doing anything. If a newer query arrives for that user during the
+# pause, the older one notices when it wakes up and does nothing at all -
+# not even the instant empty-query reply - so a fast, empty-query answer
+# for an earlier keystroke can never win the display race against a real
+# search for what the user has since finished typing. The same staleness
+# check is re-tested after the network search too, since that can also
+# take real time.
 # ---------------------------------------------------------------------------
+DEBOUNCE_SECONDS = 0.4
+
 _latest_query_token = {}  # user_id -> opaque token identifying their latest query
 
 
@@ -114,6 +121,15 @@ async def inline_search_handler(client: Client, inline_query: InlineQuery):
     user_id = inline_query.from_user.id if inline_query.from_user else None
     token = _start_query(user_id)
 
+    # Debounce: wait a moment before acting on this query at all. If a
+    # newer query arrives for this user in the meantime, this one is
+    # superseded - skip it entirely (not even the instant "type a title"
+    # reply below) so only the LAST query in a fast-typing burst ever gets
+    # answered. See the module-level comment above for why this matters.
+    await asyncio.sleep(DEBOUNCE_SECONDS)
+    if _is_stale(user_id, token):
+        return
+
     mode, query = _parse_mode(inline_query.query)
 
     if not query:
@@ -132,12 +148,8 @@ async def inline_search_handler(client: Client, inline_query: InlineQuery):
     # handling other updates while it's in flight.
     results_data = await asyncio.to_thread(search_fn, query)
 
-    # A newer keystroke's query has since come in for this user - a fresher
-    # answer is already on its way (or already landed), so don't send this
-    # one. Without this check, a "no results" answer for an earlier, shorter
-    # query text can land after the real results for what the user has
-    # since finished typing, and Telegram shows both stacked together (the
-    # "❌ No Results Found" banner sitting on top of real results).
+    # Re-check after the network call too, since that also takes real time
+    # and a newer query could have arrived while it was in flight.
     if _is_stale(user_id, token):
         return
 
@@ -282,4 +294,4 @@ async def inline_result_chosen(client: Client, chosen: ChosenInlineResult):
 
     await send_imdb_details_inline(
         client, chosen.inline_message_id, result_id, user_id=user_id
-            )
+    )
