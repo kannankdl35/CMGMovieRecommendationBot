@@ -38,10 +38,12 @@ from services.ott_releases import get_cached_ott_releases, resolve_release_key
 from database.watchlist_db import add_to_watchlist, remove_from_watchlist, is_in_watchlist
 
 # Shared watchlist text/keyboard builder + the delete-then-resend helper,
-# used by the Watchlist Home button (callback_data="watchlist_open" below)
-# and by the /watchlist command in plugins/watchlist.py. Everything renders
-# inside this Telegram chat - no Web App / external page.
-from plugins.watchlist import send_watchlist_view
+# used by the "delwl_" delete-from-listing flow below and by the
+# /watchlist command in plugins/watchlist.py, plus the edit-in-place
+# helper used by the Watchlist Home button (callback_data="watchlist_open"
+# below). Everything renders inside this Telegram chat - no Web App /
+# external page.
+from plugins.watchlist import send_watchlist_view, edit_watchlist_view
 
 # ✅ NEW - "This Month Watched" feature: database helpers + the shared
 # listing/achievements view builder (plugins/month_watched.py), same
@@ -55,6 +57,7 @@ from database.month_watched_db import (
 from keyboards.month_watched import achievements_keyboard
 from plugins.month_watched import (
     send_month_watched_view,
+    edit_month_watched_view,
     get_month_watched_view,
     build_achievements_text,
 )
@@ -141,9 +144,9 @@ async def callback_handler(client: Client, callback: CallbackQuery):
     # plugins/details.py's build_details_keyboard()). Unlike "back_home"
     # above, this details message is very often a photo (poster + caption)
     # rather than plain text, so it can't just be edited in place into the
-    # Home menu text - instead this deletes/clears the details message
-    # (same delete-then-resend pattern as "watchlist_open" /
-    # "month_watched_open" below) and sends a fresh Home menu message.
+    # Home menu text - instead this deletes/clears the details message and
+    # sends a fresh Home menu message (same delete-then-resend pattern
+    # used by the "delwl_" / "delmw_" delete-from-listing flows below).
 
     if data == "home_from_search":
 
@@ -476,7 +479,7 @@ async def callback_handler(client: Client, callback: CallbackQuery):
         await callback.answer()
         return
 
-    # ---------------- 🎲 SUGGEST RANDOM MOVIE: LANGUAGE SELECTED ----------------
+# ---------------- 🎲 SUGGEST RANDOM MOVIE: LANGUAGE SELECTED ----------------
     # Fired when a language button is tapped ("random_lang_<lang>").
     # Fetches ONE random movie for that language meeting its quality floor
     # and sends its full details straight away (poster + info + Watchlist/
@@ -619,15 +622,17 @@ async def callback_handler(client: Client, callback: CallbackQuery):
         return
 
     # ---------------- WATCHLIST ----------------
+    # Fired from the main menu's "📋 WATCHLIST" button (callback_data
+    # "watchlist_open", see keyboards/home.py). Edited IN PLACE over the
+    # Home menu message - no delete-then-reappear flash - same pattern as
+    # "back_home" / "trending_open" above. The delete-then-resend
+    # send_watchlist_view() is still used (unchanged) whenever the list
+    # itself needs to be refreshed after an add/delete, e.g. "delwl_"
+    # below.
 
     if data == "watchlist_open":
 
-        try:
-            await callback.message.delete()
-        except Exception:
-            pass
-
-        await send_watchlist_view(client, callback.message.chat.id, user_id)
+        await edit_watchlist_view(client, callback.message, user_id)
 
         await callback.answer()
         return
@@ -785,19 +790,16 @@ async def callback_handler(client: Client, callback: CallbackQuery):
 
     # ---------------- 🗓️ THIS MONTH WATCHED ----------------
     # Fired from the main menu's "🗓️ This Month Watched" button
-    # (callback_data="month_watched_open", see keyboards/home.py). Deletes
-    # the Home menu message and sends the current-month watched listing +
-    # Monthly Status as a fresh message, same delete-then-resend pattern
-    # as "watchlist_open" above.
+    # (callback_data="month_watched_open", see keyboards/home.py). Edited
+    # IN PLACE over the Home menu message - no delete-then-reappear flash -
+    # same pattern as "watchlist_open" above. The delete-then-resend
+    # send_month_watched_view() is still used (unchanged) whenever the
+    # list itself needs to be refreshed after an add/delete, e.g. "delmw_"
+    # below.
 
     if data == "month_watched_open":
 
-        try:
-            await callback.message.delete()
-        except Exception:
-            pass
-
-        await send_month_watched_view(client, callback.message.chat.id, user_id)
+        await edit_month_watched_view(client, callback.message, user_id)
 
         await callback.answer()
         return
