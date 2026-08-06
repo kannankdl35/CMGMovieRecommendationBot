@@ -92,6 +92,31 @@ async def send_watchlist_view(client, chat_id, user_id):
     return sent
 
 
+async def edit_watchlist_view(client, message, user_id):
+    """Edit `message` (the Home menu message the user tapped "📋 WATCHLIST"
+    on) IN PLACE into the current watchlist listing, instead of deleting it
+    and sending a brand new message.
+
+    This is what makes tapping "📋 WATCHLIST" on the Home menu go straight
+    into the watchlist with no delete-then-reappear flash - same in-place
+    pattern as "back_home" / "trending_open" etc. in plugins/callback.py.
+
+    Also updates the tracked "last watchlist message" pointer to this same
+    message, so a later refresh (e.g. deleting an item from the watchlist,
+    which still uses the delete-then-resend send_watchlist_view() above)
+    correctly removes this exact message before sending the fresh one.
+    """
+    text, keyboard = await get_watchlist_view(user_id)
+
+    try:
+        await message.edit_text(text=text, reply_markup=keyboard)
+        set_last_watchlist_message(user_id, message.chat.id, message.id)
+    except Exception:
+        # Fallback so Watchlist still opens even if the edit fails for
+        # some reason (e.g. message too old / already deleted).
+        await send_watchlist_view(client, message.chat.id, user_id)
+
+
 @Client.on_message(filters.command("watchlist"))
 async def watchlist_command(client, message):
     """Entry point for /watchlist - lists saved titles as numbered text with
