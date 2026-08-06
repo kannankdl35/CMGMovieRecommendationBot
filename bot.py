@@ -15,6 +15,11 @@ from services.monthly_report import monthly_watched_scheduler
 # those menus after the cache goes stale.
 from services.release_scheduler import release_cache_scheduler
 
+# ✅ NEW - Activity Log Channel: notifies LOG_CHANNEL_ID on every bot
+# restart and on every brand-new user (the latter is fired from
+# plugins/start.py instead).
+from services.logger import send_bot_restart_log
+
 app = Client(
     "CMGMovieRecommendationBot",
     api_id=API_ID,
@@ -28,6 +33,10 @@ async def main():
     await app.start()
 
     print("✅ CMG Movie Recommendation Bot Started...")
+
+    # ✅ NEW - Activity Log Channel: post a #BotRestarted log every time
+    # the process (re)starts. See services/logger.py.
+    await send_bot_restart_log(app)
 
     # Runs for the lifetime of the process alongside normal update
     # handling - app.start()/idle()/app.stop() (instead of app.run()) is
