@@ -133,6 +133,32 @@ async def send_month_watched_view(client, chat_id, user_id):
     return sent
 
 
+async def edit_month_watched_view(client, message, user_id):
+    """Edit `message` (the Home menu message the user tapped "🗓️ THIS MONTH
+    WATCHED" on) IN PLACE into the current This Month Watched listing +
+    Monthly Status, instead of deleting it and sending a brand new message.
+
+    This is what makes tapping "🗓️ THIS MONTH WATCHED" on the Home menu go
+    straight into the listing with no delete-then-reappear flash - same
+    in-place pattern as plugins/watchlist.py's edit_watchlist_view().
+
+    Also updates the tracked "last This Month Watched message" pointer to
+    this same message, so a later refresh (e.g. deleting an item from the
+    list, which still uses the delete-then-resend send_month_watched_view()
+    above) correctly removes this exact message before sending the fresh
+    one.
+    """
+    text, keyboard = await get_month_watched_view(user_id)
+
+    try:
+        await message.edit_text(text=text, reply_markup=keyboard)
+        set_last_month_watched_message(user_id, message.chat.id, message.id)
+    except Exception:
+        # Fallback so This Month Watched still opens even if the edit
+        # fails for some reason (e.g. message too old / already deleted).
+        await send_month_watched_view(client, message.chat.id, user_id)
+
+
 @Client.on_message(filters.command(["thismonth", "monthwatched"]))
 async def month_watched_command(client, message):
     """Entry point for /thismonth (alias /monthwatched) - same content as
