@@ -131,7 +131,12 @@ def build_details_keyboard(
         * This Month Watched Delete -> callback_data "delmw_<key_id>":
           removes the item, deletes this details message, and refreshes
           the This Month Watched listing.
-        * Watchlist button still behaves like "search" (in place).
+        * ❤️ Add to Watchlist / 🗑 Delete from Watchlist button is NOT
+          shown at all on this page - a title opened from This Month
+          Watched has no Watchlist action here (it also has nothing to do
+          with Watchlist membership, since adding to This Month Watched
+          already removes a title from the Watchlist - see the "addmw_" /
+          "addmwh_" branch in plugins/callback.py).
 
     "🔎 Search Another Movie/Series" (only shown when show_home=True - see
     above) pre-fills "imdb "/"tmdb " into the chat's inline query box (same
@@ -153,19 +158,26 @@ def build_details_keyboard(
     # keyboard with the same show_home value - see the docstring above.
     home_marker = "h" if show_home else ""
 
-    if in_watchlist:
-        if context == "watchlist":
-            watchlist_button = InlineKeyboardButton(
-                "🗑 Delete from Watchlist", callback_data=f"delwl_{key_id}"
-            )
+    # ❤️ Add to Watchlist / 🗑 Delete from Watchlist is hidden entirely for
+    # details pages opened from the "🗓️ This Month Watched" listing (see
+    # the "month_watched" docstring section above) - `watchlist_button`
+    # stays None and the row is simply skipped below.
+    watchlist_button = None
+
+    if context != "month_watched":
+        if in_watchlist:
+            if context == "watchlist":
+                watchlist_button = InlineKeyboardButton(
+                    "🗑 Delete from Watchlist", callback_data=f"delwl_{key_id}"
+                )
+            else:
+                watchlist_button = InlineKeyboardButton(
+                    "🗑 Delete from Watchlist", callback_data=f"rmwl{home_marker}_{key_id}"
+                )
         else:
             watchlist_button = InlineKeyboardButton(
-                "🗑 Delete from Watchlist", callback_data=f"rmwl{home_marker}_{key_id}"
+                "❤️ Add to Watchlist", callback_data=f"addwl{home_marker}_{key_id}"
             )
-    else:
-        watchlist_button = InlineKeyboardButton(
-            "❤️ Add to Watchlist", callback_data=f"addwl{home_marker}_{key_id}"
-        )
 
     if in_month_watched:
         if context == "month_watched":
@@ -189,10 +201,10 @@ def build_details_keyboard(
             InlineKeyboardButton("🏠 Home", callback_data="home_from_search")
         )
 
-    rows = [
-        [watchlist_button],
-        [month_watched_button],
-    ]
+    rows = []
+    if watchlist_button is not None:
+        rows.append([watchlist_button])
+    rows.append([month_watched_button])
 
     # "🔎 Search Another Movie/Series" is only relevant for details pages
     # opened from the SEARCH - IMDb / SEARCH - TMDb inline search results,
