@@ -48,6 +48,19 @@ def current_month_key(dt=None):
     return dt.strftime("%Y-%m")
 
 
+def month_key_to_label(month_key):
+    """Turn a 'YYYY-MM' month_key into a human-readable label, e.g.
+    "2026-08" -> "August 2026". Used to show the current month's name in
+    the "This Month Watched" / "Monthly Status" headers (see
+    plugins/month_watched.py), so it always matches whatever month_key the
+    stats were actually computed for and updates automatically every
+    calendar month - no hardcoding needed."""
+    try:
+        return datetime.strptime(month_key, "%Y-%m").strftime("%B %Y")
+    except (TypeError, ValueError):
+        return month_key
+
+
 def _clean(value):
     if not value or value == "N/A":
         return None
