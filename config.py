@@ -19,3 +19,10 @@ TMDB_API_KEY = os.getenv("TMDB_API_KEY")
 
 MONGO_URI = os.getenv("MONGO_URI")
 DATABASE_NAME = os.getenv("DATABASE_NAME", "CMGMovieRecommendationBot")
+
+# ✅ NEW - Activity Log Channel
+# Private chat/channel the bot posts #NewUser and #BotRestarted logs to
+# (see services/logger.py). Make the bot an admin there. Left unset (None)
+# is safe - logging just silently no-ops instead of erroring.
+_log_channel_id = os.getenv("LOG_CHANNEL_ID")
+LOG_CHANNEL_ID = int(_log_channel_id) if _log_channel_id else None
