@@ -672,6 +672,15 @@ async def callback_handler(client: Client, callback: CallbackQuery):
             await callback.answer("Could not add this title. Please try again.", show_alert=True)
             return
 
+        # ✅ NEW: a title already marked watched this month cannot be added
+        # to the Watchlist - show a popup and stop, without adding it or
+        # changing the keyboard.
+        already_watched_this_month = await is_in_month_watched(user_id, imdb_id)
+
+        if already_watched_this_month:
+            await callback.answer("THIS MOVIE ALREADY WATCHED THIS MONTH", show_alert=True)
+            return
+
         poster = details.get("Poster")
         poster = poster if poster and poster != "N/A" else None
 
