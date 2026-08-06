@@ -25,7 +25,11 @@ from services.tmdb import get_random_movies_by_language, get_random_movies_other
 # Per-user in-memory storage of the last trending listing fetched, so the
 # numbered buttons under it can be mapped back to a title (see
 # database/user_state.py).
-from database.user_state import save_trending_results, get_trending_results
+from database.user_state import (
+    save_trending_results,
+    get_trending_results,
+    get_last_watchlist_message,
+)
 
 # 🎬 Upcoming Movies (Theatre Release / OTT Release This Week) keyboards +
 # data sources - see keyboards/upcoming.py, services/theatre_releases.py,
@@ -879,12 +883,27 @@ async def callback_handler(client: Client, callback: CallbackQuery):
 
         added = await add_to_month_watched(user_id, imdb_id, details)
 
-        # Preserve whatever the Watchlist button is currently showing -
-        # this callback only changes the This Month Watched button.
-        in_watchlist = await is_in_watchlist(user_id, imdb_id)
+        # ✅ NEW: marking a title watched this month also removes it from
+        # the Watchlist, if it happened to be saved there - a title that's
+        # been watched doesn't need to stay in the "to watch" list.
+        was_in_watchlist = await is_in_watchlist(user_id, imdb_id)
+        removed_from_watchlist = False
+
+        if was_in_watchlist:
+            removed_from_watchlist = await remove_from_watchlist(user_id, imdb_id)
+
+            # If the user currently has their Watchlist listing open,
+            # refresh it too so it no longer shows this title.
+            previous_watchlist_msg = get_last_watchlist_message(user_id)
+            if previous_watchlist_msg:
+                wl_chat_id, _ = previous_watchlist_msg
+                try:
+                    await send_watchlist_view(client, wl_chat_id, user_id)
+                except Exception:
+                    pass
 
         new_markup = build_details_keyboard(
-            imdb_id, in_watchlist=in_watchlist, in_month_watched=True,
+            imdb_id, in_watchlist=False, in_month_watched=True,
             context="search", show_home=show_home,
         )
 
@@ -901,7 +920,9 @@ async def callback_handler(client: Client, callback: CallbackQuery):
             except Exception:
                 pass
 
-        if added:
+        if removed_from_watchlist:
+            await callback.answer("Added to this month watched and deleted from watchlist ✅")
+        elif added:
             await callback.answer("Added to This Month Watched ✅")
         else:
             await callback.answer("Already added this month.")
