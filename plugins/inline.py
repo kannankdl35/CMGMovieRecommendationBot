@@ -16,6 +16,11 @@ from services.tmdb import search_titles_tmdb
 
 from plugins.details import send_imdb_details_inline
 
+# ✅ NEW - /stats command: bumps the all-time "Total Searches" counter
+# once per real, settled search (see the call site below and
+# database/stats_db.py).
+from database.stats_db import increment_search_count
+
 # Telegram allows up to 50 inline results per answer; capped lower to keep
 # results relevant and responses fast.
 INLINE_RESULT_LIMIT = 20
@@ -75,6 +80,25 @@ def _is_stale(user_id, token):
     if user_id is None:
         return False
     return _latest_query_token.get(user_id) is not token
+
+
+def _track_search():
+    """✅ NEW - /stats command: fire-and-forget bump of the all-time
+    "Total Searches" counter, called once a real search has actually
+    settled (past the debounce + staleness checks). Runs as a background
+    task so a slow/failed DB write never delays the inline results the
+    user is waiting on; any failure is swallowed the same way the rest of
+    this file swallows non-critical errors.
+    """
+    async def _bump():
+        try:
+            await increment_search_count()
+        except Exception as e:
+            print("⚠️ Could not increment search counter (continuing anyway)")
+            print(f"Type: {type(e).__name__}")
+            print(f"Message: {e}")
+
+    asyncio.create_task(_bump())
 
 
 def _parse_mode(raw_query):
@@ -152,6 +176,11 @@ async def inline_search_handler(client: Client, inline_query: InlineQuery):
     # and a newer query could have arrived while it was in flight.
     if _is_stale(user_id, token):
         return
+
+    # ✅ NEW - /stats command: this query made it all the way to a real,
+    # settled search (past debounce + both staleness checks) - count it,
+    # whether or not it actually found anything.
+    _track_search()
 
     if not results_data:
         # ✅ Simple, unambiguous message when nothing matches - shown as
