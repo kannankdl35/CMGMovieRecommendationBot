@@ -4,6 +4,7 @@ from pyrogram import Client, filters
 
 from keyboards.home import home_keyboard
 from database.users_db import register_user
+from services.logger import send_new_user_log
 
 print("✅ START PLUGIN LOADED")
 
@@ -16,7 +17,13 @@ async def start_command(client, message):
     user = message.from_user
     if user:
         try:
-            await register_user(user.id, username=user.username, first_name=user.first_name)
+            is_new_user = await register_user(
+                user.id, username=user.username, first_name=user.first_name
+            )
+            if is_new_user:
+                # ✅ NEW - Activity Log Channel: log only the FIRST /start
+                # from this user, not every subsequent one.
+                await send_new_user_log(client, user)
         except Exception as e:
             print("⚠️ Could not register user (continuing anyway)")
             print(f"Type: {type(e).__name__}")
