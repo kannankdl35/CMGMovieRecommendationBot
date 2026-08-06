@@ -1,4 +1,4 @@
-# Location: database/users_db.py  (NEW FILE)
+# Location: database/users_db.py  (REPLACE ENTIRE FILE)
 
 from database.mongo import users_collection
 
@@ -19,8 +19,13 @@ async def register_user(user_id, username=None, first_name=None):
 
     Safe to call every time /start is used - it just keeps username/
     first_name up to date rather than creating duplicates.
+
+    Returns True the first time this user_id is ever seen (a brand-new
+    document was inserted), and False on every later /start from the same
+    user (an existing document was just updated). plugins/start.py uses
+    this to fire the #NewUser log exactly once per user.
     """
-    await users_collection.update_one(
+    result = await users_collection.update_one(
         {"user_id": user_id},
         {
             "$set": {
@@ -31,6 +36,7 @@ async def register_user(user_id, username=None, first_name=None):
         },
         upsert=True,
     )
+    return result.upserted_id is not None
 
 
 async def get_all_user_ids():
