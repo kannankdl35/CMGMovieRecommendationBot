@@ -2,7 +2,11 @@
 
 from pyrogram import Client, filters
 
-from database.month_watched_db import get_month_watched, compute_monthly_stats
+from database.month_watched_db import (
+    get_month_watched,
+    compute_monthly_stats,
+    month_key_to_label,
+)
 from keyboards.month_watched import month_watched_list_keyboard, achievements_keyboard
 
 # ✅ Tracks the last This Month Watched listing message per user so it can
@@ -28,18 +32,27 @@ from database.user_state import (
 WATCHED_DISPLAY_LIMIT = 30  # keeps the text + button grid well within Telegram's limits
 
 
-def build_month_watched_text(docs):
+def build_month_watched_text(docs, month_key=None):
     """Build the numbered This Month Watched listing body for the given
-    (already limited/ordered) list of documents."""
+    (already limited/ordered) list of documents.
+
+    The header always shows the current month's name (e.g. "August 2026"),
+    derived from `month_key` - since `month_key` itself is always the
+    live current-month value (see database/month_watched_db.py's
+    current_month_key()), this label updates automatically every calendar
+    month with no hardcoding needed."""
+    month_label = month_key_to_label(month_key) if month_key else ""
+    header = f"🗓️ **This Month Watched - {month_label}**" if month_label else "🗓️ **This Month Watched**"
+
     if not docs:
         return (
-            "🗓️ **This Month Watched**\n\n"
+            f"{header}\n\n"
             "📭 Nothing marked watched this month yet.\n\n"
             "Open any title's details page and tap ➕ **Add to This Month "
             "Watched** to start tracking."
         )
 
-    lines = ["🗓️ **This Month Watched**\n"]
+    lines = [f"{header}\n"]
 
     for index, doc in enumerate(docs, start=1):
         title = doc.get("title") or "Unknown"
@@ -58,8 +71,16 @@ def build_monthly_status_text(stats):
     """Build the Monthly Status block (Feature 3) from a stats dict
     produced by database/month_watched_db.py's build_stats_from_docs() /
     compute_monthly_stats(). Shared by the live page below and the
-    end-of-month report (services/monthly_report.py)."""
-    lines = ["📊 **Monthly Status**\n"]
+    end-of-month report (services/monthly_report.py).
+
+    The header always shows the month's name (e.g. "August 2026"), derived
+    from `stats["month_key"]` - so the live page's header updates
+    automatically every calendar month, and the end-of-month report
+    (services/monthly_report.py) correctly shows the name of the month
+    that just ended rather than the current one."""
+    month_label = month_key_to_label(stats.get("month_key"))
+    header = f"📊 **Monthly Status - {month_label}**" if month_label else "📊 **Monthly Status**"
+    lines = [f"{header}\n"]
 
     lines.append(f"🎬 Movies Watched: {stats['movie_count']}")
     lines.append(f"📺 Series Watched: {stats['series_count']}")
@@ -102,7 +123,7 @@ async def get_month_watched_view(user_id):
     stats = await compute_monthly_stats(user_id)
     docs = stats["docs"][:WATCHED_DISPLAY_LIMIT]
 
-    list_text = build_month_watched_text(docs)
+    list_text = build_month_watched_text(docs, month_key=stats["month_key"])
     status_text = build_monthly_status_text(stats)
 
     text = f"{list_text}\n\n{status_text}"
