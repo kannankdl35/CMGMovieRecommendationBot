@@ -1,5 +1,7 @@
 # Location: database/users_db.py  (REPLACE ENTIRE FILE)
 
+from datetime import datetime, timezone
+
 from database.mongo import users_collection
 
 # ---------------------------------------------------------------------------
@@ -11,6 +13,12 @@ from database.mongo import users_collection
 # end-of-month report (services/monthly_report.py) message EVERY registered
 # user - including ones whose stats are all zero for the month - instead of
 # only users who happen to have a watched-list entry.
+#
+# ✅ NEW - /stats command
+# Each user document also carries a `joined_at` timestamp, set once (and
+# never overwritten again) the first time a user is ever seen - see
+# register_user() below. database/stats_db.py uses it to compute "New
+# Users Today".
 # ---------------------------------------------------------------------------
 
 
@@ -18,7 +26,10 @@ async def register_user(user_id, username=None, first_name=None):
     """Upsert a user record. Called from plugins/start.py's /start handler.
 
     Safe to call every time /start is used - it just keeps username/
-    first_name up to date rather than creating duplicates.
+    first_name up to date rather than creating duplicates. `joined_at` is
+    only ever set on the very first insert ($setOnInsert), so it reliably
+    marks when this user first joined even though the document itself gets
+    updated again on every later /start.
 
     Returns True the first time this user_id is ever seen (a brand-new
     document was inserted), and False on every later /start from the same
@@ -32,7 +43,10 @@ async def register_user(user_id, username=None, first_name=None):
                 "user_id": user_id,
                 "username": username,
                 "first_name": first_name,
-            }
+            },
+            "$setOnInsert": {
+                "joined_at": datetime.now(timezone.utc),
+            },
         },
         upsert=True,
     )
