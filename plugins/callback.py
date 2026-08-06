@@ -28,7 +28,6 @@ from services.tmdb import get_random_movies_by_language, get_random_movies_other
 from database.user_state import (
     save_trending_results,
     get_trending_results,
-    get_last_watchlist_message,
 )
 
 # 🎬 Upcoming Movies (Theatre Release / OTT Release This Week) keyboards +
@@ -886,21 +885,13 @@ async def callback_handler(client: Client, callback: CallbackQuery):
         # ✅ NEW: marking a title watched this month also removes it from
         # the Watchlist, if it happened to be saved there - a title that's
         # been watched doesn't need to stay in the "to watch" list.
+        # Note: we only delete it here - we deliberately do NOT re-send/
+        # refresh the Watchlist listing message afterwards.
         was_in_watchlist = await is_in_watchlist(user_id, imdb_id)
         removed_from_watchlist = False
 
         if was_in_watchlist:
             removed_from_watchlist = await remove_from_watchlist(user_id, imdb_id)
-
-            # If the user currently has their Watchlist listing open,
-            # refresh it too so it no longer shows this title.
-            previous_watchlist_msg = get_last_watchlist_message(user_id)
-            if previous_watchlist_msg:
-                wl_chat_id, _ = previous_watchlist_msg
-                try:
-                    await send_watchlist_view(client, wl_chat_id, user_id)
-                except Exception:
-                    pass
 
         new_markup = build_details_keyboard(
             imdb_id, in_watchlist=False, in_month_watched=True,
