@@ -27,11 +27,14 @@ DATABASE_NAME = os.getenv("DATABASE_NAME", "CMGMovieRecommendationBot")
 _log_channel_id = os.getenv("LOG_CHANNEL_ID")
 LOG_CHANNEL_ID = int(_log_channel_id) if _log_channel_id else None
 
-# ✅ NEW - /stats command
-# Comma-separated Telegram user ids allowed to run /stats, e.g.
-#   ADMIN_IDS=123456789,987654321
-# Leave unset/empty in .env to allow ANY user to run /stats - only do that
-# if you're fine with total-user/storage/search numbers being public.
+# ✅ NEW - /stats and /broadcast commands
+# Comma-separated Telegram user ids allowed to run /stats and /broadcast,
+# e.g. ADMIN_IDS=123456789,987654321
+# For /stats: leave unset/empty in .env to allow ANY user to run it - only
+# do that if you're fine with total-user/storage/search numbers being
+# public.
+# For /broadcast (plugins/broadcast.py): unlike /stats, an unset/empty
+# ADMIN_IDS blocks EVERYONE from broadcasting - it's never made public.
 _admin_ids_raw = os.getenv("ADMIN_IDS", "")
 ADMIN_IDS = {
     int(uid.strip()) for uid in _admin_ids_raw.split(",") if uid.strip()
