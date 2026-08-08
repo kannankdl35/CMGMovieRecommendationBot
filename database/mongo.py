@@ -30,3 +30,10 @@ users_collection = db["users"]
 # monthly report scheduler last considered "active", so it can detect a
 # month rollover exactly once even across bot restarts.
 bot_state_collection = db["bot_state"]
+
+# ✅ NEW - ⚙️ Settings feature: one document per user storing which IMDb/
+# TMDb detail fields they've toggled on/off (database/settings_db.py). A
+# separate collection (rather than reusing users_collection) keeps this
+# fully additive - it's never read by anything that existed before this
+# feature, and users_collection's own documents are never touched by it.
+settings_collection = db["settings"]
