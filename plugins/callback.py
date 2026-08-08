@@ -76,6 +76,25 @@ from plugins.details import (
 # plugins/posters.py + plugins/inline.py + keyboards/home.py).
 from plugins.posters import send_posters
 
+# ✅ NEW - ⚙️ Settings feature: per-user IMDb/TMDb field visibility -
+# database helpers (get_settings/toggle_field + each source's field order)
+# and the keyboards for the Settings menu / IMDb Settings / TMDb Settings
+# pages. See database/settings_db.py, keyboards/settings.py, and
+# plugins/details.py (which is what actually applies these settings to
+# every details page).
+from database.settings_db import (
+    get_settings as get_display_settings,
+    toggle_field as toggle_display_field,
+    IMDB_FIELD_ORDER,
+    TMDB_FIELD_ORDER,
+)
+from keyboards.settings import (
+    settings_menu_keyboard,
+    imdb_settings_keyboard,
+    tmdb_settings_keyboard,
+    FIELD_LABELS,
+)
+
 
 HOME_TEXT = (
     "👋 **Welcome to CMG Movie Recommendation Bot**\n\n"
@@ -88,8 +107,32 @@ HOME_TEXT = (
     "• 🎲 **SUGGEST RANDOM MOVIE** - pick a language, get 7+ rated random picks\n"
     "• 📋 **WATCHLIST** - your saved titles\n"
     "• 🗓️ **THIS MONTH WATCHED** - track what you've watched this month + "
-    "unlock achievements\n\n"
+    "unlock achievements\n"
+    "• ⚙️ **SETTINGS** - choose which fields appear in your details\n\n"
     "Click a button below to get started."
+)
+
+# ✅ NEW - ⚙️ Settings feature
+SETTINGS_MENU_TEXT = (
+    "⚙️ **Settings**\n\n"
+    "Choose which source you'd like to customize:\n\n"
+    "• 🎥 **IMDb Settings** - toggle fields shown in SEARCH - IMDb details\n"
+    "• 📽 **TMDb Settings** - toggle fields shown in SEARCH - TMDb details\n\n"
+    "Pick one below 👇"
+)
+
+IMDB_SETTINGS_TEXT = (
+    "🎥 **IMDb Settings**\n\n"
+    "Tap a field to switch it on or off.\n"
+    "✅ = shown in IMDb details   ❌ = hidden\n\n"
+    "Changes apply immediately to every IMDb result from now on."
+)
+
+TMDB_SETTINGS_TEXT = (
+    "📽 **TMDb Settings**\n\n"
+    "Tap a field to switch it on or off.\n"
+    "✅ = shown in TMDb details   ❌ = hidden\n\n"
+    "Changes apply immediately to every TMDb result from now on."
 )
 
 TRENDING_MENU_TEXT = (
@@ -980,6 +1023,93 @@ async def callback_handler(client: Client, callback: CallbackQuery):
         await send_month_watched_view(client, chat_id, user_id)
 
         await callback.answer("Removed from This Month Watched 🗑")
+        return
+
+    # ---------------- ⚙️ SETTINGS: MENU ----------------
+    # Fired from the main menu's "⚙️ Settings" button (callback_data
+    # "settings_open", see keyboards/home.py). Edited in place over the
+    # Home menu message - same pattern as "trending_open" / "watchlist_open"
+    # above.
+
+    if data == "settings_open":
+
+        await callback.message.edit_text(
+            text=SETTINGS_MENU_TEXT,
+            reply_markup=settings_menu_keyboard()
+        )
+
+        await callback.answer()
+        return
+
+    # ---------------- ⚙️ SETTINGS: IMDb ----------------
+    # Fired from "🎥 IMDb Settings" (callback_data="settings_imdb_open").
+    # Shows one ✅/❌ toggle per field this bot actually fetches from the
+    # IMDb API (services/imdb.py) - see database/settings_db.py's
+    # IMDB_FIELD_ORDER. Each user's on/off choices are stored in MongoDB
+    # and read back here every time this page is opened, so they persist
+    # across sessions/restarts.
+
+    if data == "settings_imdb_open":
+
+        current = await get_display_settings(user_id, "imdb")
+
+        await callback.message.edit_text(
+            text=IMDB_SETTINGS_TEXT,
+            reply_markup=imdb_settings_keyboard(IMDB_FIELD_ORDER, current)
+        )
+
+        await callback.answer()
+        return
+
+    # ---------------- ⚙️ SETTINGS: TMDb ----------------
+    # Same as IMDb Settings above, but for the fields services/tmdb.py
+    # actually fetches - see database/settings_db.py's TMDB_FIELD_ORDER.
+
+    if data == "settings_tmdb_open":
+
+        current = await get_display_settings(user_id, "tmdb")
+
+        await callback.message.edit_text(
+            text=TMDB_SETTINGS_TEXT,
+            reply_markup=tmdb_settings_keyboard(TMDB_FIELD_ORDER, current)
+        )
+
+        await callback.answer()
+        return
+
+    # ---------------- ⚙️ SETTINGS: TOGGLE A FIELD ----------------
+    # callback_data "set_imdb_toggle_<field>" / "set_tmdb_toggle_<field>"
+    # (see keyboards/settings.py) - flips that field on/off for this user
+    # and persists it (database/settings_db.py's toggle_field()), then
+    # redraws the same page in place so the ✅/❌ icon updates immediately.
+    #
+    # Disabled fields are dropped from every future IMDb/TMDb details
+    # caption by utils/formatter.py's format_imdb_details() - see
+    # plugins/details.py, which reads these saved settings before building
+    # each details page. Nothing else about the bot is touched: existing
+    # buttons, the Watchlist, This Month Watched, etc. all behave exactly
+    # as before.
+
+    if data.startswith("set_imdb_toggle_") or data.startswith("set_tmdb_toggle_"):
+
+        source = "imdb" if data.startswith("set_imdb_toggle_") else "tmdb"
+        field = data.replace(f"set_{source}_toggle_", "", 1)
+
+        updated = await toggle_display_field(user_id, source, field)
+
+        field_order = IMDB_FIELD_ORDER if source == "imdb" else TMDB_FIELD_ORDER
+        keyboard_fn = imdb_settings_keyboard if source == "imdb" else tmdb_settings_keyboard
+
+        try:
+            await callback.message.edit_reply_markup(
+                reply_markup=keyboard_fn(field_order, updated)
+            )
+        except Exception:
+            pass
+
+        label = FIELD_LABELS.get(field, field.title())
+        state_text = "shown ✅" if updated.get(field) else "hidden ❌"
+        await callback.answer(f"{label} now {state_text}")
         return
 
     # ---------------- UNKNOWN ----------------
