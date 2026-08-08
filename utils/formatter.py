@@ -13,7 +13,7 @@ def _clean(value):
     return value
 
 
-def format_imdb_details(details, total_episodes=None):
+def format_imdb_details(details, total_episodes=None, enabled_fields=None):
     """Build a rich caption for a movie/series using the normalized details
     dict produced by services.imdb.get_details() or
     services.tmdb.get_details_tmdb() (plugins/details.py's fetch_details()
@@ -38,30 +38,58 @@ def format_imdb_details(details, total_episodes=None):
     of `details` itself - pass None to omit the Episodes line. This is used
     everywhere a title's details are shown (both search flows and the
     Watchlist), so all of them stay identical.
+
+    ✅ NEW - ⚙️ Settings feature: `enabled_fields` is the per-user field
+    visibility dict built by database/settings_db.py's get_settings() (see
+    plugins/details.py, which looks it up - keyed by details["Source"] -
+    before calling this function). Any field whose key resolves to False
+    is left out of the caption entirely, same as if the source itself
+    never had that field. Passing None (the default) shows every field
+    exactly as before this feature existed - only plugins/details.py's
+    three callers ever pass an explicit dict.
     """
+
+    def enabled(key):
+        if enabled_fields is None:
+            return True
+        return enabled_fields.get(key, True)
+
     title = details.get("Title", "Unknown")
     year = details.get("Year", "-")
     media_type = details.get("Type", "movie")
     source = details.get("Source", "imdb")
 
-    runtime = _clean(details.get("Runtime"))
-    genre = _clean(details.get("Genre"))
-    total_seasons = _clean(details.get("totalSeasons"))
-    rating = _clean(details.get("imdbRating"))
+    runtime = _clean(details.get("Runtime")) if enabled("runtime") else None
+    genre = _clean(details.get("Genre")) if enabled("genres") else None
+    total_seasons = _clean(details.get("totalSeasons")) if enabled("seasons") else None
+    rating = _clean(details.get("imdbRating")) if enabled("rating") else None
     imdb_votes = _clean(details.get("imdbVotes"))
     rated = _clean(details.get("Rated"))
-    language = _clean(details.get("Language"))
-    country = _clean(details.get("Country"))
-    director = _clean(details.get("Director"))
-    writer = _clean(details.get("Writer"))
-    actors = _clean(details.get("Actors"))
+    language = _clean(details.get("Language")) if enabled("language") else None
+    country = _clean(details.get("Country")) if enabled("country") else None
+    director = _clean(details.get("Director")) if enabled("director") else None
+    writer = _clean(details.get("Writer")) if enabled("writers") else None
+    actors = _clean(details.get("Actors")) if enabled("cast") else None
     awards = _clean(details.get("Awards"))
-    plot = _clean(details.get("Plot")) or "No plot summary available."
+    plot = _clean(details.get("Plot")) if enabled("plot") else None
+    if enabled("plot") and not plot:
+        plot = "No plot summary available."
 
     icon = "📺" if media_type == "series" else "🎬"
     rating_label = "TMDb Rating" if source == "tmdb" else "IMDb Rating"
 
-    caption = f"{icon} **{title} ({year})**\n\n"
+    # ✅ NEW - Title/Year are themselves toggleable fields (see
+    # database/settings_db.py's IMDB_FIELD_ORDER/TMDB_FIELD_ORDER) - build
+    # the header out of whichever of the two are enabled, falling back to
+    # just the movie/series icon if both are hidden.
+    header_parts = []
+    if enabled("title"):
+        header_parts.append(title)
+    if enabled("year"):
+        header_parts.append(f"({year})")
+    header = " ".join(header_parts).strip()
+
+    caption = f"{icon} **{header}**\n\n" if header else f"{icon}\n\n"
 
     if runtime:
         caption += f"⏱ Runtime : {runtime}\n"
@@ -70,7 +98,7 @@ def format_imdb_details(details, total_episodes=None):
     if media_type == "series":
         if total_seasons:
             caption += f"📊 Seasons : {total_seasons}\n"
-        if total_episodes:
+        if total_episodes and enabled("episodes"):
             caption += f"📺 Episodes : {total_episodes}\n"
     if rating:
         caption += f"⭐ {rating_label} : {rating}/10\n"
@@ -91,6 +119,7 @@ def format_imdb_details(details, total_episodes=None):
     if awards:
         caption += f"🏆 Awards : {awards}\n"
 
-    caption += f"\n📝 {plot}"
+    if plot:
+        caption += f"\n📝 {plot}"
 
     return caption
