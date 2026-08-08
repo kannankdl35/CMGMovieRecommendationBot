@@ -20,6 +20,12 @@ from database.watchlist_db import is_in_watchlist
 # where the details page was opened from.
 from database.month_watched_db import is_in_month_watched
 
+# ✅ NEW - ⚙️ Settings feature: per-user IMDb/TMDb field visibility,
+# looked up here (keyed by details["Source"]) and applied to every details
+# page this module builds - see database/settings_db.py and the ⚙️
+# Settings menu in plugins/callback.py / keyboards/settings.py.
+from database.settings_db import get_settings as get_display_settings
+
 
 def _source_mode(key_id):
     """"tmdb" for a TMDb-sourced key ("tmdb_movie_603" / "tmdb_tv_1396"),
@@ -57,6 +63,32 @@ def _total_episodes(key_id, details):
     # so this always resolves to None - kept for symmetry / possible future
     # data source.
     return get_series_episode_count(key_id, details.get("totalSeasons"))
+
+
+async def _resolve_display(user_id, details):
+    """✅ NEW - ⚙️ Settings feature: look up this user's saved field
+    visibility settings for whichever source ("imdb"/"tmdb") `details`
+    came from, and apply them to the Poster - the poster is sent as the
+    photo/attachment itself rather than a caption line, so (unlike every
+    other toggleable field) it can't be filtered inside
+    utils/formatter.py's format_imdb_details() and is resolved here
+    instead.
+
+    Returns (poster_url_or_None, enabled_fields_dict). `enabled_fields` is
+    passed straight through to format_imdb_details() by every caller
+    below. Falls back to "everything enabled" when there's no user_id to
+    look up (get_display_settings() already handles user_id=None) - same
+    fallback pattern used for in_watchlist/in_month_watched elsewhere in
+    this file.
+    """
+    source = details.get("Source", "imdb")
+    enabled_fields = await get_display_settings(user_id, source)
+
+    poster = details.get("Poster")
+    if not poster or poster == "N/A" or not enabled_fields.get("poster", True):
+        poster = None
+
+    return poster, enabled_fields
 
 
 def build_details_keyboard(
@@ -263,10 +295,11 @@ async def send_imdb_details(
 
     total_episodes = _total_episodes(key_id, details)
 
-    caption = format_imdb_details(details, total_episodes=total_episodes)
+    poster, enabled_fields = await _resolve_display(user_id, details)
 
-    poster = details.get("Poster")
-    poster = poster if poster and poster != "N/A" else None
+    caption = format_imdb_details(
+        details, total_episodes=total_episodes, enabled_fields=enabled_fields
+    )
 
     if in_watchlist is None:
         # Auto-detect - falls back to False (Add) if we have no user_id to check.
@@ -331,10 +364,12 @@ async def send_trending_details(client, chat_id, key_id, user_id=None):
         return
 
     total_episodes = _total_episodes(key_id, details)
-    caption = format_imdb_details(details, total_episodes=total_episodes)
 
-    poster = details.get("Poster")
-    poster = poster if poster and poster != "N/A" else None
+    poster, enabled_fields = await _resolve_display(user_id, details)
+
+    caption = format_imdb_details(
+        details, total_episodes=total_episodes, enabled_fields=enabled_fields
+    )
 
     in_watchlist = await is_in_watchlist(user_id, key_id) if user_id else False
     in_month_watched = await is_in_month_watched(user_id, key_id) if user_id else False
@@ -394,7 +429,11 @@ async def send_imdb_details_inline(client, inline_message_id, key_id, user_id=No
 
     total_episodes = _total_episodes(key_id, details)
 
-    caption = format_imdb_details(details, total_episodes=total_episodes)
+    poster, enabled_fields = await _resolve_display(user_id, details)
+
+    caption = format_imdb_details(
+        details, total_episodes=total_episodes, enabled_fields=enabled_fields
+    )
 
     in_watchlist = await is_in_watchlist(user_id, key_id) if user_id else False
     in_month_watched = await is_in_month_watched(user_id, key_id) if user_id else False
@@ -402,9 +441,6 @@ async def send_imdb_details_inline(client, inline_message_id, key_id, user_id=No
     buttons = build_details_keyboard(
         key_id, in_watchlist, in_month_watched, context="search", show_home=True
     )
-
-    poster = details.get("Poster")
-    poster = poster if poster and poster != "N/A" else None
 
     try:
         if poster:
