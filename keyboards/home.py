@@ -14,6 +14,7 @@ def home_keyboard():
       6. 🎲 SUGGEST RANDOM MOVIE
       7. 📋 WATCHLIST
       8. 🗓️ THIS MONTH WATCHED
+      9. ⚙️ SETTINGS
 
     All three of the first buttons use Telegram Inline Mode, same as the
     old "Find Movies & Series" button - switch_inline_query_current_chat
@@ -59,6 +60,12 @@ def home_keyboard():
     tapped "➕ Add to This Month Watched" on), that month's stats, and a
     "🏆 See the Achievements" page - see keyboards/month_watched.py,
     database/month_watched_db.py, and plugins/month_watched.py.
+
+    ✅ NEW - "⚙️ Settings" (callback_data="settings_open") opens the
+    IMDb Settings / TMDb Settings selection page (keyboards/settings.py),
+    where each user can toggle which detail fields (Poster, Title, Year,
+    Rating, Plot, ...) appear in their IMDb/TMDb movie/series details -
+    see database/settings_db.py and plugins/callback.py.
     """
     return InlineKeyboardMarkup(
         [
@@ -108,6 +115,12 @@ def home_keyboard():
                 InlineKeyboardButton(
                     "🗓️ This Month Watched",
                     callback_data="month_watched_open"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "⚙️ Settings",
+                    callback_data="settings_open"
                 )
             ]
         ]
