@@ -40,7 +40,8 @@ async def start_command(client, message):
         "• 🎲 **SUGGEST RANDOM MOVIE** - a random pick, 7+ rated with 500+ votes\n"
         "• 📋 **WATCHLIST** - your saved titles\n"
         "• 🗓️ **THIS MONTH WATCHED** - track what you've watched this month "
-        "+ unlock achievements\n\n"
+        "+ unlock achievements\n"
+        "• ⚙️ **SETTINGS** - choose which fields appear in your details\n\n"
         "Click a button below to get started."
     )
 
