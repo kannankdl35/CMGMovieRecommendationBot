@@ -1171,11 +1171,37 @@ async def callback_handler(client: Client, callback: CallbackQuery):
     # each details page. Nothing else about the bot is touched: existing
     # buttons, the Watchlist, This Month Watched, etc. all behave exactly
     # as before.
+    #
+    # ✅ NEW - once a user has saved a ✏️ Custom Caption for this source,
+    # the field-by-field caption is no longer used at all, so every toggle
+    # except 🖼 Poster becomes a no-op (Poster still controls whether the
+    # poster image itself is attached, independent of the caption text -
+    # see keyboards/settings.py). Tapping a non-Poster field in that state
+    # shows an alert instead of silently doing nothing / getting out of
+    # sync with what's actually saved, and points the user at editing or
+    # removing their template. Checked per source (imdb/tmdb) - a custom
+    # caption on one source never blocks toggles on the other.
 
     if data.startswith("set_imdb_toggle_") or data.startswith("set_tmdb_toggle_"):
 
         source = "imdb" if data.startswith("set_imdb_toggle_") else "tmdb"
         field = data.replace(f"set_{source}_toggle_", "", 1)
+
+        if field != "poster":
+            existing_caption = await get_custom_caption(user_id, source)
+            if existing_caption:
+                # Telegram caps answerCallbackQuery alert text at 200 chars,
+                # so this is a trimmed version of the requested message that
+                # keeps the same meaning (custom caption present -> edit/
+                # delete it, don't use per-field toggles).
+                await callback.answer(
+                    "You can't use this button because you added a custom "
+                    "caption. Edit your current custom caption to add/remove "
+                    "tags, or delete it with /delete_custom_caption to use "
+                    "this button.",
+                    show_alert=True,
+                )
+                return
 
         updated = await toggle_display_field(user_id, source, field)
 
