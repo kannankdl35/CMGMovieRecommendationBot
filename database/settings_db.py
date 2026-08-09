@@ -124,3 +124,66 @@ async def toggle_field(user_id, source, field):
 
     current[field] = new_value
     return current
+
+
+# ---------------------------------------------------------------------------
+# ✅ NEW - ✏️ Custom Caption feature
+#
+# Lets each user fully replace the field-by-field caption built by
+# utils/formatter.py's format_imdb_details() with their own template, per
+# source ("imdb"/"tmdb") - built from the #TAG placeholders listed in
+# plugins/custom_caption.py, plus any of their own text (channel name,
+# username, etc). See utils/formatter.py's render_custom_caption(), which
+# fills a saved template in, and plugins/details.py's _resolve_display(),
+# which decides (per source) whether to use it instead of the normal
+# caption for a given user.
+#
+# Stored on the SAME per-user document as the field toggles above
+# ({"user_id": ..., "imdb_fields": {...}, "tmdb_fields": {...},
+# "imdb_custom_caption": "...", "tmdb_custom_caption": "..."}). A user
+# with no saved template for a source simply has no
+# "<source>_custom_caption" key at all - get_custom_caption() below
+# treats that (and an empty string) the same: "use the default caption".
+# ---------------------------------------------------------------------------
+
+
+async def get_custom_caption(user_id, source):
+    """Return this user's saved custom caption template for `source`
+    ("imdb"/"tmdb"), or None if they've never saved one. Callers treat
+    None as "use the normal field-by-field caption" (see
+    plugins/details.py). Same user_id=None fallback as get_settings()
+    above - returns None without touching the database.
+    """
+    if not user_id:
+        return None
+
+    doc = await settings_collection.find_one({"user_id": user_id})
+    if not doc:
+        return None
+
+    return doc.get(f"{source}_custom_caption") or None
+
+
+async def set_custom_caption(user_id, source, template):
+    """Save/replace this user's custom caption template for `source` -
+    used for every future IMDb/TMDb result from this point on. See
+    plugins/custom_caption.py's receive_custom_caption(), which collects
+    the template text from the user and calls this.
+    """
+    await settings_collection.update_one(
+        {"user_id": user_id},
+        {"$set": {f"{source}_custom_caption": template}},
+        upsert=True,
+    )
+
+
+async def delete_custom_caption(user_id, source):
+    """Remove this user's saved custom caption template for `source`,
+    reverting them back to the normal field-by-field caption (still
+    respecting whatever field toggles they've set above). Safe to call
+    even if nothing was ever saved for this source.
+    """
+    await settings_collection.update_one(
+        {"user_id": user_id},
+        {"$unset": {f"{source}_custom_caption": ""}},
+    )
