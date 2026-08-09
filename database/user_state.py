@@ -106,3 +106,25 @@ def get_last_month_watched_message(user_id: int):
 def clear_last_month_watched_message(user_id: int):
     if user_id in user_states:
         user_states[user_id].pop("month_watched_msg", None)
+
+
+# ---------- ✏️ Custom Caption input tracking ----------
+# ✅ NEW: Remembers which source ("imdb"/"tmdb"), if any, a user is
+# currently expected to send their next custom caption template for - set
+# when they open "✏️ Custom Caption" under IMDb/TMDb Settings
+# (plugins/callback.py), read by plugins/custom_caption.py's plain-text
+# message handler, and cleared either once that message arrives or as
+# soon as the user taps any other button (see the top of
+# plugins/callback.py's callback_handler()).
+
+def set_awaiting_custom_caption(user_id: int, source: str):
+    set_state(user_id, "awaiting_custom_caption", source)
+
+
+def get_awaiting_custom_caption(user_id: int):
+    return get_state(user_id).get("awaiting_custom_caption")
+
+
+def clear_awaiting_custom_caption(user_id: int):
+    if user_id in user_states:
+        user_states[user_id].pop("awaiting_custom_caption", None)
