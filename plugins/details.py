@@ -1,4 +1,4 @@
-# Location: plugins/details.py  (REPLACE ENTIRE FILE)
+# Location: plugins/details.py 
 
 import asyncio
 
@@ -6,7 +6,7 @@ import asyncio
 # (SEARCH - IMDb / SEARCH - TMDb) and by the Watchlist / This Month Watched.
 from services.imdb import get_details, get_series_episode_count
 from services.tmdb import get_details_tmdb
-from utils.formatter import format_imdb_details
+from utils.formatter import format_imdb_details, render_custom_caption
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 # Used to auto-detect whether a title is already saved, so the correct
@@ -24,7 +24,10 @@ from database.month_watched_db import is_in_month_watched
 # looked up here (keyed by details["Source"]) and applied to every details
 # page this module builds - see database/settings_db.py and the ⚙️
 # Settings menu in plugins/callback.py / keyboards/settings.py.
-from database.settings_db import get_settings as get_display_settings
+from database.settings_db import (
+    get_settings as get_display_settings,
+    get_custom_caption,   # ✅ NEW - ✏️ Custom Caption feature
+)
 
 
 def _source_mode(key_id):
@@ -74,21 +77,42 @@ async def _resolve_display(user_id, details):
     utils/formatter.py's format_imdb_details() and is resolved here
     instead.
 
-    Returns (poster_url_or_None, enabled_fields_dict). `enabled_fields` is
-    passed straight through to format_imdb_details() by every caller
-    below. Falls back to "everything enabled" when there's no user_id to
-    look up (get_display_settings() already handles user_id=None) - same
-    fallback pattern used for in_watchlist/in_month_watched elsewhere in
-    this file.
+    Returns (poster_url_or_None, enabled_fields_dict, custom_caption).
+    `enabled_fields` and `custom_caption` are passed straight through to
+    _build_caption() by every caller below. Falls back to "everything
+    enabled, no custom caption" when there's no user_id to look up
+    (get_display_settings()/get_custom_caption() already handle
+    user_id=None) - same fallback pattern used for
+    in_watchlist/in_month_watched elsewhere in this file.
+
+    ✅ NEW - ✏️ Custom Caption feature: `custom_caption` is this user's
+    saved template for this source (database/settings_db.py's
+    get_custom_caption()), or None if they've never saved one. Fetched
+    here alongside enabled_fields since both are per-user/per-source
+    lookups needed to render this same details page.
     """
     source = details.get("Source", "imdb")
     enabled_fields = await get_display_settings(user_id, source)
+    custom_caption = await get_custom_caption(user_id, source)
 
     poster = details.get("Poster")
     if not poster or poster == "N/A" or not enabled_fields.get("poster", True):
         poster = None
 
-    return poster, enabled_fields
+    return poster, enabled_fields, custom_caption
+
+
+def _build_caption(details, total_episodes, enabled_fields, custom_caption):
+    """✅ NEW - ✏️ Custom Caption feature: use the user's saved template
+    (utils/formatter.py's render_custom_caption()) if they have one for
+    this source, otherwise fall back to the normal field-by-field caption
+    (format_imdb_details()) exactly as before this feature existed. The
+    per-field ✅/❌ toggles only ever apply in that second case - a saved
+    custom caption is the user's full choice of what appears in the text
+    body."""
+    if custom_caption:
+        return render_custom_caption(custom_caption, details, total_episodes=total_episodes)
+    return format_imdb_details(details, total_episodes=total_episodes, enabled_fields=enabled_fields)
 
 
 def build_details_keyboard(
@@ -295,11 +319,9 @@ async def send_imdb_details(
 
     total_episodes = _total_episodes(key_id, details)
 
-    poster, enabled_fields = await _resolve_display(user_id, details)
+    poster, enabled_fields, custom_caption = await _resolve_display(user_id, details)
 
-    caption = format_imdb_details(
-        details, total_episodes=total_episodes, enabled_fields=enabled_fields
-    )
+    caption = _build_caption(details, total_episodes, enabled_fields, custom_caption)
 
     if in_watchlist is None:
         # Auto-detect - falls back to False (Add) if we have no user_id to check.
@@ -365,11 +387,9 @@ async def send_trending_details(client, chat_id, key_id, user_id=None):
 
     total_episodes = _total_episodes(key_id, details)
 
-    poster, enabled_fields = await _resolve_display(user_id, details)
+    poster, enabled_fields, custom_caption = await _resolve_display(user_id, details)
 
-    caption = format_imdb_details(
-        details, total_episodes=total_episodes, enabled_fields=enabled_fields
-    )
+    caption = _build_caption(details, total_episodes, enabled_fields, custom_caption)
 
     in_watchlist = await is_in_watchlist(user_id, key_id) if user_id else False
     in_month_watched = await is_in_month_watched(user_id, key_id) if user_id else False
@@ -429,11 +449,9 @@ async def send_imdb_details_inline(client, inline_message_id, key_id, user_id=No
 
     total_episodes = _total_episodes(key_id, details)
 
-    poster, enabled_fields = await _resolve_display(user_id, details)
+    poster, enabled_fields, custom_caption = await _resolve_display(user_id, details)
 
-    caption = format_imdb_details(
-        details, total_episodes=total_episodes, enabled_fields=enabled_fields
-    )
+    caption = _build_caption(details, total_episodes, enabled_fields, custom_caption)
 
     in_watchlist = await is_in_watchlist(user_id, key_id) if user_id else False
     in_month_watched = await is_in_month_watched(user_id, key_id) if user_id else False
