@@ -15,6 +15,7 @@ def home_keyboard():
       7. 📋 WATCHLIST
       8. 🗓️ THIS MONTH WATCHED
       9. ⚙️ SETTINGS
+     10. ℹ️ ABOUT
 
     All three of the first buttons use Telegram Inline Mode, same as the
     old "Find Movies & Series" button - switch_inline_query_current_chat
@@ -66,6 +67,12 @@ def home_keyboard():
     where each user can toggle which detail fields (Poster, Title, Year,
     Rating, Plot, ...) appear in their IMDb/TMDb movie/series details -
     see database/settings_db.py and plugins/callback.py.
+
+    ✅ NEW - "ℹ️ About" (callback_data="about_open") opens the About page
+    (Bot Name, Description, Version, Developer/Admin, Channel, etc.) with
+    a "🐞 Report Issues/Bugs" button underneath - all the shown text lives
+    in about/about_info.py so it's editable on its own, see
+    keyboards/about.py and plugins/callback.py.
     """
     return InlineKeyboardMarkup(
         [
@@ -121,6 +128,12 @@ def home_keyboard():
                 InlineKeyboardButton(
                     "⚙️ Settings",
                     callback_data="settings_open"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "ℹ️ About",
+                    callback_data="about_open"
                 )
             ]
         ]
