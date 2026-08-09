@@ -112,6 +112,14 @@ from database.user_state import (
 )
 from plugins.custom_caption import custom_caption_page_text
 
+# ✅ NEW - ℹ️ About feature: the "🐞 Report Issues/Bugs" + "⬅ Back" buttons
+# (keyboards/about.py) and all the shown text (Bot Name, Description,
+# Version, Developer/Admin, Channel, etc.), which lives entirely in
+# about/about_info.py so it can be edited on its own without touching
+# this file.
+from keyboards.about import about_keyboard
+from about.about_info import build_about_text
+
 
 HOME_TEXT = (
     "👋 **Welcome to CMG Movie Recommendation Bot**\n\n"
@@ -247,6 +255,30 @@ async def callback_handler(client: Client, callback: CallbackQuery):
             chat_id=chat_id,
             text=HOME_TEXT,
             reply_markup=home_keyboard()
+        )
+
+        await callback.answer()
+        return
+
+    # ---------------- ℹ️ ABOUT ----------------
+    # Fired from the main menu's "ℹ️ About" button (callback_data
+    # "about_open", see keyboards/home.py). Edited in place over the Home
+    # menu message - same pattern as "settings_open" / "trending_open"
+    # below. All the shown text (Bot Name, Description, Version,
+    # Developer/Admin, Channel, etc.) lives in about/about_info.py so it
+    # can be edited without touching this file - "🐞 Report Issues/Bugs"
+    # (a URL button straight to the developer's Telegram) and "⬅ Back"
+    # are built by keyboards/about.py.
+    # disable_web_page_preview=True keeps the Developer/Hosting/Source
+    # markdown links above from popping open a link-preview box under the
+    # text.
+
+    if data == "about_open":
+
+        await callback.message.edit_text(
+            text=build_about_text(),
+            reply_markup=about_keyboard(),
+            disable_web_page_preview=True,
         )
 
         await callback.answer()
