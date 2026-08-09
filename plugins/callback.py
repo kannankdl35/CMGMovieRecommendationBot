@@ -87,6 +87,8 @@ from database.settings_db import (
     toggle_field as toggle_display_field,
     IMDB_FIELD_ORDER,
     TMDB_FIELD_ORDER,
+    get_custom_caption,       # ✅ NEW - ✏️ Custom Caption feature
+    delete_custom_caption,    # ✅ NEW - ✏️ Custom Caption feature
 )
 from keyboards.settings import (
     settings_menu_keyboard,
@@ -94,6 +96,21 @@ from keyboards.settings import (
     tmdb_settings_keyboard,
     FIELD_LABELS,
 )
+
+# ✅ NEW - ✏️ Custom Caption feature: lets each user replace the normal
+# field-by-field IMDb/TMDb caption with their own template, opened from
+# "✏️ Custom Caption" under IMDb/TMDb Settings (keyboards/settings.py).
+# See database/settings_db.py (saved template storage),
+# utils/formatter.py's render_custom_caption() (fills a template in),
+# and plugins/custom_caption.py (this page's text, the plain-text
+# message handler that saves what the user sends, and the
+# /show_custom_caption + /delete_custom_caption commands).
+from keyboards.custom_caption import custom_caption_keyboard
+from database.user_state import (
+    set_awaiting_custom_caption,
+    clear_awaiting_custom_caption,
+)
+from plugins.custom_caption import custom_caption_page_text
 
 
 HOME_TEXT = (
@@ -171,6 +188,14 @@ async def callback_handler(client: Client, callback: CallbackQuery):
 
     data = callback.data
     user_id = callback.from_user.id
+
+    # ✅ NEW - ✏️ Custom Caption feature: tapping ANY button cancels
+    # "awaiting a custom caption message" mode (database/user_state.py) -
+    # the two "custom_caption_..._open" branches below set it again right
+    # after, so opening/reopening that page still works the same either
+    # way. This keeps a stray tap elsewhere from later being misread as
+    # the caption template the user meant to send.
+    clear_awaiting_custom_caption(user_id)
 
     # ---------------- HOME ----------------
 
@@ -1073,6 +1098,63 @@ async def callback_handler(client: Client, callback: CallbackQuery):
             text=TMDB_SETTINGS_TEXT,
             reply_markup=tmdb_settings_keyboard(TMDB_FIELD_ORDER, current)
         )
+
+        await callback.answer()
+        return
+
+    # ---------------- ✏️ CUSTOM CAPTION: OPEN ----------------
+    # Fired from "✏️ Custom Caption" under IMDb Settings / TMDb Settings
+    # (callback_data "custom_caption_imdb_open" / "custom_caption_tmdb_open"
+    # - see keyboards/settings.py). Shows the tags this source supports,
+    # this user's current template (if any), and marks them as awaiting
+    # their next plain-text message as the new template - see
+    # plugins/custom_caption.py's receive_custom_caption().
+
+    if data in ("custom_caption_imdb_open", "custom_caption_tmdb_open"):
+
+        source = "imdb" if data == "custom_caption_imdb_open" else "tmdb"
+        current = await get_custom_caption(user_id, source)
+
+        set_awaiting_custom_caption(user_id, source)
+
+        await callback.message.edit_text(
+            text=custom_caption_page_text(source, current),
+            reply_markup=custom_caption_keyboard(source),
+        )
+
+        await callback.answer()
+        return
+
+    # ---------------- ✏️ CUSTOM CAPTION: DELETE ----------------
+    # Fired from the IMDb only / TMDb only / Both / Cancel buttons shown
+    # by /delete_custom_caption (plugins/custom_caption.py) when a user
+    # has a saved template for both sources.
+
+    if data.startswith("delcap_"):
+
+        choice = data.replace("delcap_", "", 1)
+
+        if choice == "cancel":
+            try:
+                await callback.message.edit_text("Cancelled - nothing was removed.")
+            except Exception:
+                pass
+            await callback.answer()
+            return
+
+        if choice in ("imdb", "both"):
+            await delete_custom_caption(user_id, "imdb")
+        if choice in ("tmdb", "both"):
+            await delete_custom_caption(user_id, "tmdb")
+
+        label = {"imdb": "IMDb", "tmdb": "TMDb", "both": "IMDb and TMDb"}.get(choice, choice)
+
+        try:
+            await callback.message.edit_text(
+                f"🗑 Your {label} custom caption has been removed - back to default."
+            )
+        except Exception:
+            pass
 
         await callback.answer()
         return
