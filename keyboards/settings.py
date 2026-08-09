@@ -61,6 +61,15 @@ def _source_settings_keyboard(source, field_order, current_settings):
     plugins/callback.py flips that field for this user
     (database/settings_db.py's toggle_field()) and redraws this same
     keyboard in place, so the ✅/❌ icon updates immediately on tap.
+
+    ✅ NEW - ✏️ Custom Caption feature: also adds a full-width
+    "✏️ Custom Caption" row just above "⬅ Back" - callback_data
+    "custom_caption_<source>_open", opens the page where this user can
+    replace this source's whole caption with their own template (see
+    keyboards/custom_caption.py, plugins/custom_caption.py, and
+    plugins/callback.py). Independent of the per-field toggles above:
+    those still control the Poster attachment either way, but have no
+    effect on the caption text once a custom template is saved.
     """
     rows = []
     row = []
@@ -83,6 +92,9 @@ def _source_settings_keyboard(source, field_order, current_settings):
     if row:
         rows.append(row)
 
+    rows.append(
+        [InlineKeyboardButton("✏️ Custom Caption", callback_data=f"custom_caption_{source}_open")]
+    )
     rows.append([InlineKeyboardButton("⬅ Back", callback_data="settings_open")])
 
     return InlineKeyboardMarkup(rows)
