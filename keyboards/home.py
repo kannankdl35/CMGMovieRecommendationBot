@@ -4,18 +4,15 @@ from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 
 def home_keyboard():
-    """The Home menu has eight buttons:
+    """The Home menu buttons, top to bottom:
 
-      1. 🔍 SEARCH - IMDb
-      2. 🔍 SEARCH - TMDb
+      1. 🔍 SEARCH - TMDb
+      2. 🔍 SEARCH - IMDb
       3. ⬇️ DOWNLOAD POSTERS
-      4. 🔥 TRENDING NOW
-      5. 🎬 UPCOMING MOVIES
-      6. 🎲 SUGGEST RANDOM MOVIE
-      7. 📋 WATCHLIST
-      8. 🗓️ THIS MONTH WATCHED
-      9. ⚙️ SETTINGS
-     10. ℹ️ ABOUT
+      4. 📈 TRENDING        | 📨 UPCOMING   (same row)
+      5. 🎲 RANDOM          | 🗒️ WATCHLIST  (same row)
+      6. ⚙️ SETTINGS        | ℹ️ ABOUT       (same row)
+      7. 📅 THIS MONTH WATCHED
 
     All three of the first buttons use Telegram Inline Mode, same as the
     old "Find Movies & Series" button - switch_inline_query_current_chat
@@ -35,18 +32,18 @@ def home_keyboard():
     images, with no caption, no buttons, and no other title info. See
     plugins/inline.py and plugins/posters.py.
 
-    "🔥 Trending Now" (callback_data="trending_open") opens the
+    "📈 TRENDING" (callback_data="trending_open") opens the
     Today / This Week / Home selection page (keyboards/trending.py),
     powered by TMDb's trending endpoints.
 
-    "🎬 Upcoming Movies" (callback_data="upcoming_open") opens a
+    "📨 UPCOMING" (callback_data="upcoming_open") opens a
     Theatre Release / OTT Release This Week / Back selection page
     (keyboards/upcoming.py), each leading to a language picker
     (Malayalam/Tamil/Telugu/Kannada/Hindi/English) and then a numbered
     release list - see services/theatre_releases.py,
     services/ott_releases.py, and plugins/callback.py.
 
-    ✅ "🎲 Suggest Random Movie" (callback_data="random_open") opens a
+    ✅ "🎲 RANDOM" (callback_data="random_open") opens a
     Language selection page (keyboards/random_movies.py: Malayalam, Tamil,
     Hindi, Kannada, Telugu, English, Korean, Others). Picking a language
     fetches a batch of random TMDb movies in that language (Others =
@@ -56,19 +53,19 @@ def home_keyboard():
     services/tmdb.py's get_random_movies_by_language() /
     get_random_movies_other_languages().
 
-    ✅ "🗓️ This Month Watched" (callback_data="month_watched_open") opens
+    ✅ "📅 THIS MONTH WATCHED" (callback_data="month_watched_open") opens
     the current calendar month's watched list (movies + series the user
     tapped "➕ Add to This Month Watched" on), that month's stats, and a
     "🏆 See the Achievements" page - see keyboards/month_watched.py,
     database/month_watched_db.py, and plugins/month_watched.py.
 
-    ✅ NEW - "⚙️ Settings" (callback_data="settings_open") opens the
+    ✅ "⚙️ SETTINGS" (callback_data="settings_open") opens the
     IMDb Settings / TMDb Settings selection page (keyboards/settings.py),
     where each user can toggle which detail fields (Poster, Title, Year,
     Rating, Plot, ...) appear in their IMDb/TMDb movie/series details -
     see database/settings_db.py and plugins/callback.py.
 
-    ✅ NEW - "ℹ️ About" (callback_data="about_open") opens the About page
+    ✅ "ℹ️ ABOUT" (callback_data="about_open") opens the About page
     (Bot Name, Description, Version, Developer/Admin, Channel, etc.) with
     a "🐞 Report Issues/Bugs" button underneath - all the shown text lives
     in about/about_info.py so it's editable on its own, see
@@ -78,14 +75,14 @@ def home_keyboard():
         [
             [
                 InlineKeyboardButton(
-                    "🔍 SEARCH - IMDb",
-                    switch_inline_query_current_chat="imdb "
+                    "🔍 SEARCH - TMDb",
+                    switch_inline_query_current_chat="tmdb "
                 )
             ],
             [
                 InlineKeyboardButton(
-                    "🔍 SEARCH - TMDb",
-                    switch_inline_query_current_chat="tmdb "
+                    "🔍 SEARCH - IMDb",
+                    switch_inline_query_current_chat="imdb "
                 )
             ],
             [
@@ -96,44 +93,38 @@ def home_keyboard():
             ],
             [
                 InlineKeyboardButton(
-                    "🔥 Trending Now",
+                    "📈 TRENDING",
                     callback_data="trending_open"
-                )
-            ],
-            [
+                ),
                 InlineKeyboardButton(
-                    "🎬 Upcoming Movies",
+                    "📨 UPCOMING",
                     callback_data="upcoming_open"
                 )
             ],
             [
                 InlineKeyboardButton(
-                    "🎲 Suggest Random Movie",
+                    "🎲 RANDOM",
                     callback_data="random_open"
-                )
-            ],
-            [
+                ),
                 InlineKeyboardButton(
-                    "📋 WATCHLIST",
+                    "🗒️ WATCHLIST",
                     callback_data="watchlist_open"
                 )
             ],
             [
                 InlineKeyboardButton(
-                    "🗓️ This Month Watched",
-                    callback_data="month_watched_open"
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    "⚙️ Settings",
+                    "⚙️ SETTINGS",
                     callback_data="settings_open"
+                ),
+                InlineKeyboardButton(
+                    "ℹ️ ABOUT",
+                    callback_data="about_open"
                 )
             ],
             [
                 InlineKeyboardButton(
-                    "ℹ️ About",
-                    callback_data="about_open"
+                    "📅 THIS MONTH WATCHED",
+                    callback_data="month_watched_open"
                 )
             ]
         ]
