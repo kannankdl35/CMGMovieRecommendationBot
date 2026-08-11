@@ -204,4 +204,14 @@ def render_custom_caption(template, details, total_episodes=None):
     for tag, value in values.items():
         caption = caption.replace(f"#{tag}", value)
 
+    # Defensive normalize: mobile keyboards very commonly leave a trailing
+    # space behind right before the user taps Enter to start a new line -
+    # that stray space gets saved as-is by receive_custom_caption() below
+    # and would otherwise show up as an unwanted one-space indent on that
+    # line (e.g. the title line sitting flush left while every line under
+    # it is nudged slightly right). Strip only leading/trailing whitespace
+    # from each line - fully blank lines some users add on purpose for
+    # spacing (e.g. before a channel handle) are left untouched.
+    caption = "\n".join(line.strip() for line in caption.split("\n"))
+
     return caption
