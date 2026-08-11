@@ -85,10 +85,11 @@ def custom_caption_page_text(source, current):
         f"**Available tags:**\n{_tags_line(source)}\n\n"
         "**Example:**\n"
         "```\n"
-        "🎬 #TITLE (#YEAR)\n"
-        "⭐ Rating : #RATING/10\n"
+        "<b> 🎬 Movie : #TITLE </b>\n"
+        "📅 Year : #YEAR\n"
+        "⭐ Rating : #RATING\n"
         "🎭 Genre : #GENRES\n\n"
-        "@YourChannel\n"
+        "Join Now : @Channel_Username\n"
         "```\n\n"
         f"**Current {name} caption:**\n{current_block}\n\n"
         "📌 /show_custom_caption - view your saved caption(s) anytime\n"
@@ -205,6 +206,16 @@ async def receive_custom_caption(client, message):
         # with it; a command should never itself be saved as a caption
         # template.
         raise ContinuePropagation
+
+    # Strip stray leading/trailing spaces per line before saving - mobile
+    # keyboards commonly leave a trailing space right before Enter is
+    # pressed, which would otherwise be saved as an unwanted one-space
+    # indent on the next line (see utils/formatter.py's
+    # render_custom_caption(), which normalizes the same way as a
+    # defensive fallback for templates already saved before this fix).
+    # Fully blank lines (e.g. a spacer line before a channel handle) are
+    # left untouched.
+    text = "\n".join(line.strip() for line in text.split("\n"))
 
     clear_awaiting_custom_caption(user_id)
     await set_custom_caption(user_id, source, text)
