@@ -6,6 +6,13 @@ import requests
 
 from config import TMDB_API_KEY
 
+# Used only by the typo-tolerant fallback in search_titles_tmdb() below -
+# services.imdb's search already handles misspelled queries well (see that
+# module's docstring), so it's reused here purely as a spell-corrector for
+# TMDb searches that come back empty. No circular import risk: services/
+# imdb.py has no dependency on this module.
+from services.imdb import search_titles as _imdb_search_titles
+
 # ---------------------------------------------------------------------------
 # Backend for the "SEARCH - TMDb" button (see keyboards/home.py +
 # plugins/inline.py), doing the same job as services/imdb.py's
@@ -40,17 +47,11 @@ def _clean(value):
     return value
 
 
-def search_titles_tmdb(query):
-    """Text search via TMDb's multi-search (movies + TV in one call).
-
-    Normalized to the same shape as services.imdb.search_titles():
-    Title, Year, imdbID, Type, Poster.
-
-    `imdbID` here is actually a composite TMDb key - "tmdb_movie_603" or
-    "tmdb_tv_1396" - not a real IMDb id. Everywhere else in the bot just
-    treats this key as an opaque id - see plugins/details.py's
-    fetch_details(), which is what actually knows a "tmdb_" prefix means
-    "look this one up on TMDb instead of IMDb".
+def _request_multi_search(query):
+    """One raw call to TMDb's /search/multi, normalized to this module's
+    standard result shape (Title, Year, imdbID, Type, Poster - see
+    search_titles_tmdb() below for what these mean). Returns [] on any
+    request failure or if TMDb simply has no matches for `query` as typed.
     """
     try:
         response = requests.get(
@@ -88,6 +89,89 @@ def search_titles_tmdb(query):
         )
 
     return results
+
+
+# Max number of IMDb-corrected title spellings to retry against TMDb when
+# the user's raw query gets zero hits (see search_titles_tmdb() below). Kept
+# small since each candidate costs one extra TMDb request.
+TYPO_FALLBACK_MAX_CANDIDATES = 3
+
+
+def _typo_corrected_candidates(query):
+    """TMDb's search has little tolerance for misspellings - see module
+    notes above. services.imdb.search_titles() already handles typos well,
+    so it's used here purely as a spell-corrector: ask it what title(s)
+    the query probably meant, and return up to
+    TYPO_FALLBACK_MAX_CANDIDATES unique corrected title strings, most
+    relevant first.
+
+    Returns [] if IMDb's search also can't make sense of the query, or on
+    any error - callers should just treat that as "no fallback available"
+    rather than raising.
+    """
+    try:
+        imdb_results = _imdb_search_titles(query)
+    except Exception:
+        return []
+
+    candidates = []
+    seen = set()
+
+    for item in imdb_results:
+        title = (item.get("Title") or "").strip()
+        key = title.lower()
+
+        if not title or key in seen:
+            continue
+
+        seen.add(key)
+        candidates.append(title)
+
+        if len(candidates) >= TYPO_FALLBACK_MAX_CANDIDATES:
+            break
+
+    return candidates
+
+
+def search_titles_tmdb(query):
+    """Text search via TMDb's multi-search (movies + TV in one call), with
+    a typo-tolerant fallback layered on top.
+
+    Normalized to the same shape as services.imdb.search_titles():
+    Title, Year, imdbID, Type, Poster.
+
+    `imdbID` here is actually a composite TMDb key - "tmdb_movie_603" or
+    "tmdb_tv_1396" - not a real IMDb id. Everywhere else in the bot just
+    treats this key as an opaque id - see plugins/details.py's
+    fetch_details(), which is what actually knows a "tmdb_" prefix means
+    "look this one up on TMDb instead of IMDb".
+
+    TMDb's own search is strict about spelling - a single wrong letter is
+    often enough to return zero results, unlike services.imdb's search
+    (see that module's docstring). So: try the query as typed first: if
+    that finds anything, return it as-is (unchanged behaviour). Only when
+    that comes back empty, fall back to _typo_corrected_candidates() to
+    ask IMDb's more typo-tolerant search what title was probably meant,
+    and re-run the TMDb search using that corrected spelling instead.
+    """
+    results = _request_multi_search(query)
+
+    if results:
+        return results
+
+    corrected_titles = _typo_corrected_candidates(query)
+
+    seen_ids = set()
+    fallback_results = []
+
+    for corrected_title in corrected_titles:
+        for item in _request_multi_search(corrected_title):
+            if item["imdbID"] in seen_ids:
+                continue
+            seen_ids.add(item["imdbID"])
+            fallback_results.append(item)
+
+    return fallback_results
 
 
 def get_details_tmdb(key_id):
