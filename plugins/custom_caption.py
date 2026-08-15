@@ -71,17 +71,15 @@ def custom_caption_page_text(source, current):
     name = SOURCE_NAMES[source]
 
     current_block = (
-        f"```\n{current}\n```" if current else "_Default (nothing saved yet)_"
+        f"```\n{current}\n```" if current else "_Default — nothing saved yet_"
     )
 
     return (
         f"✏️ **{name} Custom Caption**\n\n"
-        f"Send me a message with your own {name} caption template and I'll "
-        f"use it for every {name} result from now on, instead of the "
-        "default layout.\n\n"
-        "Use any of the tags below - each is replaced with the title's "
-        "actual info. You can also add whatever text you like around "
-        "them, like your channel name or username.\n\n"
+        f"Send your own {name} caption template and it'll replace the "
+        f"default layout for every {name} result.\n\n"
+        "Use any tag below — each fills in automatically. Add your own "
+        "text around them too, like a channel name or username.\n\n"
         f"**Available tags:**\n{_tags_line(source)}\n\n"
         "**Example:**\n"
         "```\n"
@@ -92,8 +90,8 @@ def custom_caption_page_text(source, current):
         "Join Now : @Channel_Username\n"
         "```\n\n"
         f"**Current {name} caption:**\n{current_block}\n\n"
-        "📌 /show_custom_caption - view your saved caption(s) anytime\n"
-        "🗑 /delete_custom_caption - remove one and go back to default"
+        "📌 /show_custom_caption — view your saved caption(s)\n"
+        "🗑 /delete_custom_caption — remove one, back to default"
     )
 
 
@@ -101,7 +99,7 @@ def _format_current(source, template):
     name = SOURCE_NAMES[source]
     if template:
         return f"**{name}:**\n```\n{template}\n```"
-    return f"**{name}:** _Default (nothing saved)_"
+    return f"**{name}:** _Default — nothing saved_"
 
 
 @Client.on_message(filters.command("show_custom_caption"))
@@ -120,9 +118,8 @@ async def show_custom_caption_command(client, message):
         "✏️ **Your Custom Captions**\n\n"
         f"{_format_current('imdb', imdb_caption)}\n\n"
         f"{_format_current('tmdb', tmdb_caption)}\n\n"
-        "Open ⚙️ Settings → 🎥 IMDb Settings / 📽 TMDb Settings → "
-        "✏️ Custom Caption to change these, or /delete_custom_caption to "
-        "remove one."
+        "Open ⚙️ Settings → 🎥 IMDb / 📽 TMDb → ✏️ Custom Caption to change "
+        "these, or /delete_custom_caption to remove one."
     )
 
     await message.reply_text(text)
@@ -149,20 +146,20 @@ async def delete_custom_caption_command(client, message):
     if imdb_caption and not tmdb_caption:
         await delete_custom_caption(user_id, "imdb")
         await message.reply_text(
-            "🗑 Your IMDb custom caption has been removed - back to default."
+            "🗑 Your IMDb custom caption has been removed — back to default."
         )
         return
 
     if tmdb_caption and not imdb_caption:
         await delete_custom_caption(user_id, "tmdb")
         await message.reply_text(
-            "🗑 Your TMDb custom caption has been removed - back to default."
+            "🗑 Your TMDb custom caption has been removed — back to default."
         )
         return
 
     # Both saved - ask which one(s) to remove.
     await message.reply_text(
-        "You have a custom caption saved for both IMDb and TMDb. Which "
+        "You have a custom caption saved for both IMDb and TMDb — which "
         "would you like to remove?",
         reply_markup=delete_custom_caption_keyboard(),
     )
@@ -222,8 +219,8 @@ async def receive_custom_caption(client, message):
 
     name = SOURCE_NAMES[source]
     await message.reply_text(
-        f"✅ Your {name} custom caption has been saved and will be used "
-        f"for every {name} result from now on.\n\n"
-        "📌 /show_custom_caption to view it anytime\n"
-        "🗑 /delete_custom_caption to remove it and go back to default"
+        f"✅ Your {name} custom caption is saved and will be used for "
+        f"every {name} result from now on.\n\n"
+        "📌 /show_custom_caption — view it anytime\n"
+        "🗑 /delete_custom_caption — remove it, back to default"
     )
