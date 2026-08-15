@@ -38,12 +38,12 @@ async def send_new_user_log(client, user):
 
     text = (
         "🆕 **#NewUser**\n\n"
-        f"🆔 **ID -** `{user_id}`\n"
-        f"👤 **Name -** [{name}](tg://user?id={user_id})"
+        f"🆔 **ID:** `{user_id}`\n"
+        f"👤 **Name:** [{name}](tg://user?id={user_id})"
     )
 
     if user.username:
-        text += f"\n🔗 **Username -** @{user.username}"
+        text += f"\n🔗 **Username:** @{user.username}"
 
     try:
         await client.send_message(
@@ -66,8 +66,8 @@ async def send_bot_restart_log(client):
 
     text = (
         "🔄 **#BotRestarted**\n\n"
-        "✅ **Status -** Online\n"
-        f"🕒 **Time -** {now}"
+        "✅ **Status:** Online\n"
+        f"🕒 **Time:** {now}"
     )
 
     try:
