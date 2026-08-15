@@ -92,32 +92,32 @@ def format_imdb_details(details, total_episodes=None, enabled_fields=None):
     caption = f"{icon} **{header}**\n\n" if header else f"{icon}\n\n"
 
     if runtime:
-        caption += f"⏱ Runtime : {runtime}\n"
+        caption += f"⏱ **Runtime:** {runtime}\n"
     if genre:
-        caption += f"🎭 Genres : {genre}\n"
+        caption += f"🎭 **Genres:** {genre}\n"
     if media_type == "series":
         if total_seasons:
-            caption += f"📊 Seasons : {total_seasons}\n"
+            caption += f"📊 **Seasons:** {total_seasons}\n"
         if total_episodes and enabled("episodes"):
-            caption += f"📺 Episodes : {total_episodes}\n"
+            caption += f"📺 **Episodes:** {total_episodes}\n"
     if rating:
-        caption += f"⭐ {rating_label} : {rating}/10\n"
+        caption += f"⭐ **{rating_label}:** {rating}/10\n"
     if imdb_votes:
-        caption += f"🗳 Vote Count : {imdb_votes}\n"
+        caption += f"🗳 **Votes:** {imdb_votes}\n"
     if rated:
-        caption += f"🔞 Content Rating : {rated}\n"
+        caption += f"🔞 **Rated:** {rated}\n"
     if language:
-        caption += f"🗣 Language : {language}\n"
+        caption += f"🗣 **Language:** {language}\n"
     if country:
-        caption += f"🌍 Country : {country}\n"
+        caption += f"🌍 **Country:** {country}\n"
     if director:
-        caption += f"🎬 Director : {director}\n"
+        caption += f"🎬 **Director:** {director}\n"
     if writer:
-        caption += f"✍️ Writers : {writer}\n"
+        caption += f"✍️ **Writers:** {writer}\n"
     if actors:
-        caption += f"🎟 Cast : {actors}\n"
+        caption += f"🎟 **Cast:** {actors}\n"
     if awards:
-        caption += f"🏆 Awards : {awards}\n"
+        caption += f"🏆 **Awards:** {awards}\n"
 
     if plot:
         caption += f"\n📝 {plot}"
