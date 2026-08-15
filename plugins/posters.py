@@ -34,13 +34,13 @@ async def send_posters(client, chat_id, key_id):
       View Details fallback for the regular search flow).
     """
     if not key_id or not key_id.startswith("tmdb_"):
-        await client.send_message(chat_id, "❌ Could not find this title.")
+        await client.send_message(chat_id, "❌ Couldn't find this title.")
         return
 
     poster_urls = await asyncio.to_thread(fetch_posters_tmdb, key_id)
 
     if not poster_urls:
-        await client.send_message(chat_id, "No posters are available for this title.")
+        await client.send_message(chat_id, "😕 No posters available for this title.")
         return
 
     # Cap at 10 - both Telegram's own media-group ceiling and the feature
@@ -53,7 +53,7 @@ async def send_posters(client, chat_id, key_id):
         try:
             await client.send_photo(chat_id=chat_id, photo=poster_urls[0])
         except Exception:
-            await client.send_message(chat_id, "No posters are available for this title.")
+            await client.send_message(chat_id, "😕 No posters available for this title.")
         return
 
     media = [InputMediaPhoto(media=url) for url in poster_urls]
