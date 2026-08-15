@@ -30,19 +30,17 @@ async def start_command(client, message):
             print(f"Message: {e}")
 
     text = (
-        "👋 **Welcome to CMG Movie Recommendation Bot**\n\n"
-        "🎬 Find any Movie or TV Series and see its full details -\n"
-        "poster, rating, cast, and plot.\n\n"
-        "• 🔍 **SEARCH - IMDb** - search powered by IMDb\n"
-        "• 🔍 **SEARCH - TMDb** - search powered by TMDb\n"
-        "• 🔥 **TRENDING NOW** - what's trending today/this week on TMDb\n"
-        "• 🎬 **UPCOMING MOVIES** - theatre & OTT releases by language\n"
-        "• 🎲 **SUGGEST RANDOM MOVIE** - a random pick, 7+ rated with 500+ votes\n"
-        "• 📋 **WATCHLIST** - your saved titles\n"
-        "• 🗓️ **THIS MONTH WATCHED** - track what you've watched this month "
-        "+ unlock achievements\n"
-        "• ⚙️ **SETTINGS** - choose which fields appear in your details\n\n"
-        "Click a button below to get started."
+        "👋 **Welcome to CMG Movie Recommendation Bot!**\n\n"
+        "Discover movies & shows — posters, ratings, cast & plot, "
+        "all in one tap.\n\n"
+        "🔍 **Search** — IMDb or TMDb\n"
+        "🔥 **Trending** — today & this week\n"
+        "🎬 **Upcoming** — theatre & OTT releases\n"
+        "🎲 **Random Pick** — a surprise, always 7★+\n"
+        "📋 **Watchlist** — save what to watch\n"
+        "📅 **This Month** — track & unlock achievements\n"
+        "⚙️ **Settings** — customize your details\n\n"
+        "👇 Tap a button below to begin"
     )
 
     buttons = home_keyboard()
