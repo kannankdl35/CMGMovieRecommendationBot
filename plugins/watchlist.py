@@ -31,12 +31,12 @@ def build_watchlist_text(docs):
     limited/ordered) list of watchlist documents."""
     if not docs:
         return (
-            "📭 Your watchlist is empty.\n\n"
-            "Use 🔍 **SEARCH - IMDb** or 🔍 **SEARCH - TMDb** to find a title, then tap "
-            "❤️ **Add to Watchlist** on its details page to save it here."
+            "📭 **Your Watchlist is empty**\n\n"
+            "Search a title with 🔍 **Search**, then tap ❤️ **Add to "
+            "Watchlist** on its details page to save it here."
         )
 
-    lines = ["📋 **Your Personal Watchlist**\n"]
+    lines = ["📋 **Your Watchlist**\n"]
 
     for index, doc in enumerate(docs, start=1):
         title = doc.get("title") or "Unknown"
@@ -46,7 +46,7 @@ def build_watchlist_text(docs):
 
         lines.append(f"{index}. {icon} {title} ({year})")
 
-    lines.append("\nTap a number below to see full details 👇")
+    lines.append("\n👇 Tap a number for full details")
 
     return "\n".join(lines)
 
