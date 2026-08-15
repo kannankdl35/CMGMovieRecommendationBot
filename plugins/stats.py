@@ -41,11 +41,11 @@ async def stats_command(client, message):
 
     text = (
         "📊 **Bot Stats**\n\n"
-        f"★ Total Users: {total_users}\n"
-        f"★ New Users Today: {new_users_today}\n"
-        f"★ Total Searches: {total_searches}\n"
-        f"★ Used Storage: {used_mb:.2f} MB\n"
-        f"★ Free Storage: {free_mb:.2f} MB"
+        f"👥 **Total Users:** {total_users}\n"
+        f"🆕 **New Today:** {new_users_today}\n"
+        f"🔍 **Total Searches:** {total_searches}\n"
+        f"💾 **Used Storage:** {used_mb:.2f} MB\n"
+        f"📦 **Free Storage:** {free_mb:.2f} MB"
     )
 
     await message.reply_text(text)
