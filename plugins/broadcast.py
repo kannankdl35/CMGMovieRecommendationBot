@@ -1,4 +1,4 @@
-# Location: plugins/broadcast.py  (NEW FILE)
+# # Location: plugins/broadcast.py  (NEW FILE)
 
 import asyncio
 import time
@@ -57,18 +57,18 @@ def _format_elapsed(seconds: float) -> str:
 
 
 def _status_text(total, completed, success, blocked, deleted, *, done=False, elapsed=None):
-    header = "✅ **Broadcast Completed**" if done else "📢 **Broadcasting Message...**"
+    header = "✅ **Broadcast Complete**" if done else "📢 **Broadcasting…**"
     lines = [header]
 
     if done and elapsed is not None:
-        lines.append(f"Completed in {_format_elapsed(elapsed)}.")
+        lines.append(f"Finished in {_format_elapsed(elapsed)}")
 
     lines.append("")
-    lines.append(f"Total Users: {total}")
-    lines.append(f"Completed: {completed} / {total}")
-    lines.append(f"Success: {success}")
-    lines.append(f"Blocked: {blocked}")
-    lines.append(f"Deleted: {deleted}")
+    lines.append(f"👥 **Total:** {total}")
+    lines.append(f"⏳ **Progress:** {completed} / {total}")
+    lines.append(f"✅ **Success:** {success}")
+    lines.append(f"🚫 **Blocked:** {blocked}")
+    lines.append(f"❌ **Failed:** {deleted}")
 
     return "\n".join(lines)
 
@@ -122,8 +122,8 @@ async def broadcast_command(client, message):
     if not target:
         await message.reply_text(
             "⚠️ Reply to the message you want to broadcast with /broadcast.\n\n"
-            "Send me the message first (text, photo, video, audio, document, "
-            "or a link), then reply to it with /broadcast."
+            "Send the message first — text, photo, video, audio, document, "
+            "or a link — then reply to it with /broadcast."
         )
         return
 
