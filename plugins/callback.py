@@ -122,57 +122,55 @@ from about.about_info import build_about_text
 
 
 HOME_TEXT = (
-    "👋 **Welcome to CMG Movie Recommendation Bot**\n\n"
-    "🎬 Find any Movie or TV Series and see its full details -\n"
-    "poster, rating, cast, and plot.\n\n"
-    "• 🔍 **SEARCH - IMDb** - search powered by IMDb\n"
-    "• 🔍 **SEARCH - TMDb** - search powered by TMDb\n"
-    "• 🔥 **TRENDING NOW** - what's trending today/this week on TMDb\n"
-    "• 🎬 **UPCOMING MOVIES** - theatre & OTT releases by language\n"
-    "• 🎲 **SUGGEST RANDOM MOVIE** - pick a language, get 7+ rated random picks\n"
-    "• 📋 **WATCHLIST** - your saved titles\n"
-    "• 🗓️ **THIS MONTH WATCHED** - track what you've watched this month + "
-    "unlock achievements\n"
-    "• ⚙️ **SETTINGS** - choose which fields appear in your details\n\n"
-    "Click a button below to get started."
+    "👋 **Welcome to CMG Movie Recommendation Bot!**\n\n"
+    "Discover movies & shows — posters, ratings, cast & plot, "
+    "all in one tap.\n\n"
+    "🔍 **Search** — IMDb or TMDb\n"
+    "🔥 **Trending** — today & this week\n"
+    "🎬 **Upcoming** — theatre & OTT releases\n"
+    "🎲 **Random Pick** — a surprise, always 7★+\n"
+    "📋 **Watchlist** — save what to watch\n"
+    "📅 **This Month** — track & unlock achievements\n"
+    "⚙️ **Settings** — customize your details\n\n"
+    "👇 Tap a button below to begin"
 )
 
 # ✅ NEW - ⚙️ Settings feature
 SETTINGS_MENU_TEXT = (
     "⚙️ **Settings**\n\n"
-    "Choose which source you'd like to customize:\n\n"
-    "• 🎥 **IMDb Settings** - toggle fields shown in SEARCH - IMDb details\n"
-    "• 📽 **TMDb Settings** - toggle fields shown in SEARCH - TMDb details\n\n"
-    "Pick one below 👇"
+    "Choose a source to customize:\n\n"
+    "🎥 **IMDb Settings** — fields shown in IMDb results\n"
+    "📽 **TMDb Settings** — fields shown in TMDb results\n\n"
+    "👇 Pick one below"
 )
 
 IMDB_SETTINGS_TEXT = (
     "🎥 **IMDb Settings**\n\n"
-    "Tap a field to switch it on or off.\n"
-    "✅ = shown in IMDb details   ❌ = hidden\n\n"
-    "Changes apply immediately to every IMDb result from now on."
+    "Tap a field to toggle it.\n"
+    "✅ Shown  ·  ❌ Hidden\n\n"
+    "Changes apply instantly to every IMDb result."
 )
 
 TMDB_SETTINGS_TEXT = (
     "📽 **TMDb Settings**\n\n"
-    "Tap a field to switch it on or off.\n"
-    "✅ = shown in TMDb details   ❌ = hidden\n\n"
-    "Changes apply immediately to every TMDb result from now on."
+    "Tap a field to toggle it.\n"
+    "✅ Shown  ·  ❌ Hidden\n\n"
+    "Changes apply instantly to every TMDb result."
 )
 
 TRENDING_MENU_TEXT = (
     "🔥 **Trending Now**\n\n"
-    "See what's trending on TMDb right now.\n\n"
-    "• 📅 **Today** - trending today\n"
-    "• 📈 **This Week** - trending this week\n\n"
-    "Pick one below 👇"
+    "What's hot on TMDb right now.\n\n"
+    "📅 **Today**\n"
+    "📈 **This Week**\n\n"
+    "👇 Pick one below"
 )
 
 UPCOMING_CATEGORY_TEXT = (
     "🎬 **Upcoming Movies**\n\n"
-    "• 🎬 **Theatre Release** - upcoming theatrical releases\n"
-    "• 📺 **OTT Release This Week** - recent/upcoming OTT releases\n\n"
-    "Pick one below 👇"
+    "🎬 **Theatre Release** — new in cinemas\n"
+    "📺 **OTT Release** — new this week on streaming\n\n"
+    "👇 Pick one below"
 )
 
 CATEGORY_LABELS = {
@@ -182,12 +180,13 @@ CATEGORY_LABELS = {
 
 
 def _upcoming_language_text(category):
-    return f"{CATEGORY_LABELS.get(category, category.title())}\n\nPick a language below 👇"
+    label = CATEGORY_LABELS.get(category, category.title())
+    return f"**{label}**\n\n🌐 Pick a language below 👇"
 
 
 RANDOM_LANGUAGE_TEXT = (
-    "🎲 **Suggest Random Movie**\n\n"
-    "Pick a language below 👇"
+    "🎲 **Random Pick**\n\n"
+    "🌐 Pick a language below 👇"
 )
 
 
@@ -318,7 +317,7 @@ async def callback_handler(client: Client, callback: CallbackQuery):
         # returns None in that case, distinct from a successful-but-empty list.
         if results is None:
             await callback.answer(
-                "⚠️ Couldn't fetch trending titles right now. Please try again.",
+                "⚠️ Couldn't load trending titles. Please try again.",
                 show_alert=True,
             )
             return
@@ -327,19 +326,19 @@ async def callback_handler(client: Client, callback: CallbackQuery):
 
         if not results:
             await callback.message.edit_text(
-                text=f"😕 No trending titles found for **{period_label}** right now.",
+                text=f"😕 No trending titles for **{period_label}** right now.",
                 reply_markup=trending_menu_keyboard()
             )
             await callback.answer()
             return
 
-        lines = [f"🔥 **Trending - {period_label}**\n"]
+        lines = [f"🔥 **Trending — {period_label}**\n"]
 
         for index, item in enumerate(results, start=1):
             icon = "📺" if item.get("Type") == "series" else "🎬"
             lines.append(f"{index}. {icon} {item.get('Title')} ({item.get('Year')})")
 
-        lines.append("\nTap a number below to see full details 👇")
+        lines.append("\n👇 Tap a number for full details")
 
         await callback.message.edit_text(
             text="\n".join(lines),
@@ -382,7 +381,7 @@ async def callback_handler(client: Client, callback: CallbackQuery):
 
         if not results or index < 1 or index > len(results):
             await callback.answer(
-                "This trending list has expired. Please reopen 🔥 Trending Now.",
+                "This list has expired — please reopen 🔥 Trending Now.",
                 show_alert=True,
             )
             return
@@ -465,8 +464,8 @@ async def callback_handler(client: Client, callback: CallbackQuery):
         if not entries:
             await callback.message.edit_text(
                 text=(
-                    f"{CATEGORY_LABELS.get(category, category.title())} - "
-                    f"**{lang.title()}**\n\n"
+                    f"**{CATEGORY_LABELS.get(category, category.title())} — "
+                    f"{lang.title()}**\n\n"
                     "😕 No releases found right now."
                 ),
                 reply_markup=upcoming_language_keyboard(category)
@@ -474,7 +473,7 @@ async def callback_handler(client: Client, callback: CallbackQuery):
             await callback.answer()
             return
 
-        lines = [f"{CATEGORY_LABELS.get(category, category.title())} - **{lang.title()}**\n"]
+        lines = [f"**{CATEGORY_LABELS.get(category, category.title())} — {lang.title()}**\n"]
 
         for index, entry in enumerate(entries, start=1):
             release_date = entry.get("release_date")
@@ -483,7 +482,7 @@ async def callback_handler(client: Client, callback: CallbackQuery):
             suffix = f" — {' · '.join(suffix_parts)}" if suffix_parts else ""
             lines.append(f"{index}. {entry.get('title')}{suffix}")
 
-        lines.append("\nTap a number below to see full details 👇")
+        lines.append("\n👇 Tap a number for full details")
 
         await callback.message.edit_text(
             text="\n".join(lines),
@@ -527,7 +526,7 @@ async def callback_handler(client: Client, callback: CallbackQuery):
 
         if not entries or index < 1 or index > len(entries):
             await callback.answer(
-                "This list may have refreshed. Please reopen 🎬 Upcoming Movies.",
+                "This list may have refreshed — please reopen 🎬 Upcoming Movies.",
                 show_alert=True,
             )
             return
@@ -548,12 +547,12 @@ async def callback_handler(client: Client, callback: CallbackQuery):
             # attach it to.
             text_lines = [f"🎬 **{entry.get('title')}**\n"]
             if entry.get("release_date"):
-                text_lines.append(f"📅 Release Date: {entry.get('release_date')}")
+                text_lines.append(f"📅 **Release:** {entry.get('release_date')}")
             if entry.get("platform"):
-                text_lines.append(f"📡 Platform: {entry.get('platform')}")
+                text_lines.append(f"📡 **Platform:** {entry.get('platform')}")
             if entry.get("genre"):
-                text_lines.append(f"🎭 Genre: {entry.get('genre')}")
-            text_lines.append(f"🗣 Language: {entry.get('language') or lang.title()}")
+                text_lines.append(f"🎭 **Genre:** {entry.get('genre')}")
+            text_lines.append(f"🗣 **Language:** {entry.get('language') or lang.title()}")
 
             await callback.message.reply_text(
                 "\n".join(text_lines),
@@ -624,7 +623,7 @@ async def callback_handler(client: Client, callback: CallbackQuery):
 
         if not results:
             await callback.answer(
-                "😕 No movies found right now. Please try again.",
+                "😕 No movies found right now — please try again.",
                 show_alert=True,
             )
             return
@@ -769,7 +768,7 @@ async def callback_handler(client: Client, callback: CallbackQuery):
         details = await asyncio.to_thread(fetch_details, imdb_id)
 
         if not details:
-            await callback.answer("Could not add this title. Please try again.", show_alert=True)
+            await callback.answer("Couldn't add this title. Please try again.", show_alert=True)
             return
 
         # ✅ NEW: a title already marked watched this month cannot be added
@@ -778,7 +777,7 @@ async def callback_handler(client: Client, callback: CallbackQuery):
         already_watched_this_month = await is_in_month_watched(user_id, imdb_id)
 
         if already_watched_this_month:
-            await callback.answer("THIS MOVIE ALREADY WATCHED THIS MONTH", show_alert=True)
+            await callback.answer("Already marked watched this month ✅", show_alert=True)
             return
 
         poster = details.get("Poster")
@@ -818,7 +817,7 @@ async def callback_handler(client: Client, callback: CallbackQuery):
         if added:
             await callback.answer("Added to Watchlist ✅")
         else:
-            await callback.answer("Already in your Watchlist.")
+            await callback.answer("Already in your Watchlist")
 
         return
 
@@ -986,7 +985,7 @@ async def callback_handler(client: Client, callback: CallbackQuery):
         details = await asyncio.to_thread(fetch_details, imdb_id)
 
         if not details:
-            await callback.answer("Could not add this title. Please try again.", show_alert=True)
+            await callback.answer("Couldn't add this title. Please try again.", show_alert=True)
             return
 
         added = await add_to_month_watched(user_id, imdb_id, details)
@@ -1021,11 +1020,11 @@ async def callback_handler(client: Client, callback: CallbackQuery):
                 pass
 
         if removed_from_watchlist:
-            await callback.answer("Added to this month watched and deleted from watchlist ✅")
+            await callback.answer("Added to This Month Watched, removed from Watchlist ✅")
         elif added:
             await callback.answer("Added to This Month Watched ✅")
         else:
-            await callback.answer("Already added this month.")
+            await callback.answer("Already added this month")
 
         return
 
@@ -1168,7 +1167,7 @@ async def callback_handler(client: Client, callback: CallbackQuery):
 
         if choice == "cancel":
             try:
-                await callback.message.edit_text("Cancelled - nothing was removed.")
+                await callback.message.edit_text("Cancelled — nothing was removed.")
             except Exception:
                 pass
             await callback.answer()
@@ -1183,7 +1182,7 @@ async def callback_handler(client: Client, callback: CallbackQuery):
 
         try:
             await callback.message.edit_text(
-                f"🗑 Your {label} custom caption has been removed - back to default."
+                f"🗑 Your {label} custom caption has been removed — back to default."
             )
         except Exception:
             pass
@@ -1227,10 +1226,9 @@ async def callback_handler(client: Client, callback: CallbackQuery):
                 # keeps the same meaning (custom caption present -> edit/
                 # delete it, don't use per-field toggles).
                 await callback.answer(
-                    "You can't use this button because you added a custom "
-                    "caption. Edit your current custom caption to add/remove "
-                    "tags, or delete it with /delete_custom_caption to use "
-                    "this button.",
+                    "You can't use this — you've set a custom caption. "
+                    "Edit it to add/remove tags, or run "
+                    "/delete_custom_caption to use this button.",
                     show_alert=True,
                 )
                 return
