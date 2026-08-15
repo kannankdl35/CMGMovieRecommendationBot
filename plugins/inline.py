@@ -130,7 +130,7 @@ def _parse_mode(raw_query):
 
 def _build_card_caption(label, title, year, mode):
     source = "IMDb" if mode == "imdb" else "TMDb"
-    return f"{label}\n**{title}** ({year})\n🔎 Source : {source}"
+    return f"{label}\n**{title}** ({year})\n🔎 **Source:** {source}"
 
 
 @Client.on_inline_query()
@@ -161,7 +161,7 @@ async def inline_search_handler(client: Client, inline_query: InlineQuery):
             results=[],
             cache_time=1,
             is_personal=True,
-            switch_pm_text=f"Type a title to search ({mode.upper()}) 🔎",
+            switch_pm_text=f"🔎 Type a title to search ({mode.upper()})",
             switch_pm_parameter="start",
         )
         return
