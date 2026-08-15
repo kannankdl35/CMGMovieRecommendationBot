@@ -314,7 +314,7 @@ async def send_imdb_details(
     details = await asyncio.to_thread(fetch_details, key_id)
 
     if not details:
-        await client.send_message(chat_id, "❌ Could not find details for this title.")
+        await client.send_message(chat_id, "❌ Couldn't find details for this title.")
         return
 
     total_episodes = _total_episodes(key_id, details)
@@ -381,7 +381,7 @@ async def send_trending_details(client, chat_id, key_id, user_id=None):
 
     if not details:
         await client.send_message(
-            chat_id, "❌ Could not fetch details for this title. Please try again."
+            chat_id, "❌ Couldn't fetch details for this title. Please try again."
         )
         return
 
@@ -436,12 +436,12 @@ async def send_imdb_details_inline(client, inline_message_id, key_id, user_id=No
     if not details:
         try:
             await client.edit_inline_text(
-                inline_message_id, "❌ Could not find details for this title."
+                inline_message_id, "❌ Couldn't find details for this title."
             )
         except Exception:
             try:
                 await client.edit_inline_caption(
-                    inline_message_id, "❌ Could not find details for this title."
+                    inline_message_id, "❌ Couldn't find details for this title."
                 )
             except Exception:
                 pass
