@@ -42,13 +42,13 @@ def build_month_watched_text(docs, month_key=None):
     current_month_key()), this label updates automatically every calendar
     month with no hardcoding needed."""
     month_label = month_key_to_label(month_key) if month_key else ""
-    header = f"🗓️ **This Month Watched - {month_label}**" if month_label else "🗓️ **This Month Watched**"
+    header = f"📅 **This Month Watched — {month_label}**" if month_label else "📅 **This Month Watched**"
 
     if not docs:
         return (
             f"{header}\n\n"
-            "📭 Nothing marked watched this month yet.\n\n"
-            "Open any title's details page and tap ➕ **Add to This Month "
+            "📭 Nothing marked watched yet.\n\n"
+            "Open a title's details page and tap ➕ **Add to This Month "
             "Watched** to start tracking."
         )
 
@@ -62,7 +62,7 @@ def build_month_watched_text(docs, month_key=None):
 
         lines.append(f"{index}. {icon} {title} ({year})")
 
-    lines.append("\nTap a number below to see full details 👇")
+    lines.append("\n👇 Tap a number for full details")
 
     return "\n".join(lines)
 
@@ -79,22 +79,22 @@ def build_monthly_status_text(stats):
     (services/monthly_report.py) correctly shows the name of the month
     that just ended rather than the current one."""
     month_label = month_key_to_label(stats.get("month_key"))
-    header = f"📊 **Monthly Status - {month_label}**" if month_label else "📊 **Monthly Status**"
+    header = f"📊 **Monthly Status — {month_label}**" if month_label else "📊 **Monthly Status**"
     lines = [f"{header}\n"]
 
-    lines.append(f"🎬 Movies Watched: {stats['movie_count']}")
-    lines.append(f"📺 Series Watched: {stats['series_count']}")
+    lines.append(f"🎬 **Movies:** {stats['movie_count']}")
+    lines.append(f"📺 **Series:** {stats['series_count']}")
     lines.append(
-        f"⏱️ Movie Watch Time: {stats['movie_hours']:.1f} hours "
-        f"({stats['movie_days']:.1f} days)"
+        f"⏱ **Watch Time:** {stats['movie_hours']:.1f}h "
+        f"({stats['movie_days']:.1f}d)"
     )
-    lines.append(f"🎭 Top Genre: {stats['top_genre'] or '-'}")
-    lines.append(f"🌐 Top Language: {stats['top_language'] or '-'}")
-    lines.append(f"🏆 Achievements Unlocked: {stats['unlocked_count']}/7")
+    lines.append(f"🎭 **Top Genre:** {stats['top_genre'] or '-'}")
+    lines.append(f"🌐 **Top Language:** {stats['top_language'] or '-'}")
+    lines.append(f"🏆 **Achievements:** {stats['unlocked_count']}/7")
 
     unlocked = [a for a in stats["achievements"] if a["unlocked"]]
 
-    lines.append("\n✅ **Unlocked Achievements**")
+    lines.append("\n✅ **Unlocked**")
     if unlocked:
         for achievement in unlocked:
             lines.append(f"{achievement['icon']} {achievement['name']}")
