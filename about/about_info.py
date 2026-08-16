@@ -1,4 +1,4 @@
-# Location: about/about_info.py  (NEW FILE)
+# Location: about/about_info.py  (REPLACE ENTIRE FILE)
 #
 # ✅ NEW - ℹ️ About feature: every value shown on the "ℹ️ About" page lives
 # in this file/folder on its own, so it can be edited any time without
@@ -75,4 +75,44 @@ def build_about_text():
         f"🗄 **Database:** {DATABASE}\n"
         f"☁️ **Hosting:** {hosting_link}\n"
         f"💻 **Source:** {source_link}"
+    )
+
+
+# ✅ NEW - ❓ Help feature: opened from the "❓ Help" button on the "ℹ️ About"
+# page (keyboards/about.py's help_keyboard(), wired up by the "help_open"
+# callback in plugins/callback.py). Walks through every feature on the
+# Home menu (keyboards/home.py) in one place, for a user who isn't sure
+# what the bot can do.
+def build_help_text():
+    """Builds the "❓ Help" page text - a full feature guide - shown by
+    plugins/callback.py's "help_open" handler.
+    """
+
+    return (
+        "❓ **Help — What This Bot Can Do**\n\n"
+        "🔍 **Search**\n"
+        "Tap 🔍 Search - IMDb or 🔍 Search - TMDb, type a title, then tap "
+        "a result for full details — poster, rating, cast, plot & more.\n\n"
+        "⬇️ **Download Posters**\n"
+        "Same search, but sends every poster on file for that title at "
+        "full resolution.\n\n"
+        "🔥 **Trending**\n"
+        "See what's trending on TMDb today or this week.\n\n"
+        "🎬 **Upcoming**\n"
+        "Browse upcoming theatre releases and this week's OTT releases, "
+        "by language.\n\n"
+        "🎲 **Random Pick**\n"
+        "Pick a language and get a random movie recommendation, always "
+        "rated 7★+.\n\n"
+        "📋 **Watchlist**\n"
+        "Save any title to watch later, right from its details page.\n\n"
+        "📅 **This Month Watched**\n"
+        "Track what you've watched this month, unlock achievements, and "
+        "get a wrap-up report when the month ends.\n\n"
+        "⚙️ **Settings**\n"
+        "Choose which fields (rating, cast, plot, etc.) show in your "
+        "results, or set your own custom caption template.\n\n"
+        "ℹ️ **About**\n"
+        "Bot info, version, and how to reach the developer.\n\n"
+        "Still stuck? Tap 🐞 Report Issues/Bugs on the About page."
     )
