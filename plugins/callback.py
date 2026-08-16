@@ -117,8 +117,8 @@ from plugins.custom_caption import custom_caption_page_text
 # Version, Developer/Admin, Channel, etc.), which lives entirely in
 # about/about_info.py so it can be edited on its own without touching
 # this file.
-from keyboards.about import about_keyboard
-from about.about_info import build_about_text
+from keyboards.about import about_keyboard, help_keyboard
+from about.about_info import build_about_text, build_help_text
 
 
 HOME_TEXT = (
@@ -277,6 +277,28 @@ async def callback_handler(client: Client, callback: CallbackQuery):
         await callback.message.edit_text(
             text=build_about_text(),
             reply_markup=about_keyboard(),
+            disable_web_page_preview=True,
+        )
+
+        await callback.answer()
+        return
+
+    # ---------------- ❓ HELP ----------------
+    # ✅ NEW - Fired from the "❓ Help" button on the "ℹ️ About" page
+    # (callback_data "help_open", see keyboards/about.py's
+    # about_keyboard()). Edited in place over the About message - same
+    # pattern as "about_open" above. The text (a full feature-by-feature
+    # guide) lives in about/about_info.py's build_help_text(), same as the
+    # About page's own text, so it's editable without touching this file.
+    # "⬅ Back" (keyboards/about.py's help_keyboard()) returns to the About
+    # page via the existing "about_open" branch above - no separate "back"
+    # callback needed.
+
+    if data == "help_open":
+
+        await callback.message.edit_text(
+            text=build_help_text(),
+            reply_markup=help_keyboard(),
             disable_web_page_preview=True,
         )
 
