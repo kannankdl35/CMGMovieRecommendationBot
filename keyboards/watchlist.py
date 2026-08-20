@@ -43,7 +43,7 @@ def watchlist_keyboard(docs):
             [InlineKeyboardButton("🗑 DELETE THE FULL LIST", callback_data="wldelall_confirm")]
         )
 
-    buttons.append([InlineKeyboardButton("🏠 Home", callback_data="back_home")])
+    buttons.append([InlineKeyboardButton("🏠 HOME", callback_data="back_home")])
 
     return InlineKeyboardMarkup(buttons)
 
