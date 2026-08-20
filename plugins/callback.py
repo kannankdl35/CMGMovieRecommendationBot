@@ -38,7 +38,13 @@ from services.theatre_releases import get_cached_theatre_releases
 from services.ott_releases import get_cached_ott_releases, resolve_release_key
 
 # Watchlist database helpers
-from database.watchlist_db import add_to_watchlist, remove_from_watchlist, is_in_watchlist
+# ✅ NEW: clear_watchlist powers the "🗑 DELETE THE FULL LIST" flow below.
+from database.watchlist_db import (
+    add_to_watchlist,
+    remove_from_watchlist,
+    is_in_watchlist,
+    clear_watchlist,
+)
 
 # Shared watchlist text/keyboard builder + the delete-then-resend helper,
 # used by the "delwl_" delete-from-listing flow below and by the
@@ -48,16 +54,26 @@ from database.watchlist_db import add_to_watchlist, remove_from_watchlist, is_in
 # external page.
 from plugins.watchlist import send_watchlist_view, edit_watchlist_view
 
+# ✅ NEW: the Yes/Cancel confirmation keyboard shown by "🗑 DELETE THE FULL
+# LIST" on the Watchlist listing.
+from keyboards.watchlist import watchlist_confirm_delete_keyboard
+
 # ✅ NEW - "This Month Watched" feature: database helpers + the shared
 # listing/achievements view builder (plugins/month_watched.py), same
 # pattern as the Watchlist above.
+# ✅ NEW: clear_month_watched powers the "🗑 DELETE THE FULL LIST" flow
+# below.
 from database.month_watched_db import (
     add_to_month_watched,
     remove_from_month_watched,
     is_in_month_watched,
     compute_monthly_stats,
+    clear_month_watched,
 )
-from keyboards.month_watched import achievements_keyboard
+# ✅ NEW: month_watched_confirm_delete_keyboard is the Yes/Cancel
+# confirmation keyboard shown by "🗑 DELETE THE FULL LIST" on the This
+# Month Watched listing.
+from keyboards.month_watched import achievements_keyboard, month_watched_confirm_delete_keyboard
 from plugins.month_watched import (
     send_month_watched_view,
     edit_month_watched_view,
@@ -761,6 +777,53 @@ async def callback_handler(client: Client, callback: CallbackQuery):
         await callback.answer()
         return
 
+    # ---------------- WATCHLIST: DELETE FULL LIST (CONFIRM PROMPT) ----------------
+    # Fired from "🗑 DELETE THE FULL LIST" under the Watchlist listing
+    # (keyboards/watchlist.py). Nothing is deleted yet - this just swaps
+    # the listing message, in place, for a Yes/Cancel confirmation prompt
+    # (keyboards/watchlist.py's watchlist_confirm_delete_keyboard()).
+
+    if data == "wldelall_confirm":
+
+        await callback.message.edit_text(
+            text=(
+                "⚠️ **Delete Full Watchlist?**\n\n"
+                "This action will permanently delete all the movies listed "
+                "here. Do you want to continue?"
+            ),
+            reply_markup=watchlist_confirm_delete_keyboard(),
+        )
+
+        await callback.answer()
+        return
+
+    # ---------------- WATCHLIST: DELETE FULL LIST (YES) ----------------
+    # Fired from "✅ Yes" on the confirmation prompt above - wipes every
+    # saved title for this user (database/watchlist_db.py's
+    # clear_watchlist()), then redraws the same message in place as the
+    # (now empty) Watchlist listing.
+
+    if data == "wldelall_yes":
+
+        await clear_watchlist(user_id)
+
+        await edit_watchlist_view(client, callback.message, user_id)
+
+        await callback.answer("Watchlist cleared 🗑")
+        return
+
+    # ---------------- WATCHLIST: DELETE FULL LIST (CANCEL) ----------------
+    # Fired from "❌ Cancel" on the confirmation prompt above - nothing is
+    # deleted; just redraws the same message in place back to the normal
+    # Watchlist listing.
+
+    if data == "wldelall_cancel":
+
+        await edit_watchlist_view(client, callback.message, user_id)
+
+        await callback.answer("Cancelled")
+        return
+
     # ---------------- WATCHLIST: ITEM SELECTED ----------------
 
     if data.startswith("wl_"):
@@ -935,6 +998,54 @@ async def callback_handler(client: Client, callback: CallbackQuery):
         await edit_month_watched_view(client, callback.message, user_id)
 
         await callback.answer()
+        return
+
+    # ---------------- 🗓️ THIS MONTH WATCHED: DELETE FULL LIST (CONFIRM PROMPT) ----------------
+    # Fired from "🗑 DELETE THE FULL LIST" under the This Month Watched
+    # listing (keyboards/month_watched.py). Nothing is deleted yet - this
+    # just swaps the listing message, in place, for a Yes/Cancel
+    # confirmation prompt (keyboards/month_watched.py's
+    # month_watched_confirm_delete_keyboard()).
+
+    if data == "mwdelall_confirm":
+
+        await callback.message.edit_text(
+            text=(
+                "⚠️ **Delete Full This Month Watched List?**\n\n"
+                "This action will permanently delete all the movies listed "
+                "here. Do you want to continue?"
+            ),
+            reply_markup=month_watched_confirm_delete_keyboard(),
+        )
+
+        await callback.answer()
+        return
+
+    # ---------------- 🗓️ THIS MONTH WATCHED: DELETE FULL LIST (YES) ----------------
+    # Fired from "✅ Yes" on the confirmation prompt above - wipes every
+    # entry for this user in the current month (database/month_watched_db.py's
+    # clear_month_watched()), then redraws the same message in place as
+    # the (now empty) This Month Watched listing.
+
+    if data == "mwdelall_yes":
+
+        await clear_month_watched(user_id)
+
+        await edit_month_watched_view(client, callback.message, user_id)
+
+        await callback.answer("This Month Watched list cleared 🗑")
+        return
+
+    # ---------------- 🗓️ THIS MONTH WATCHED: DELETE FULL LIST (CANCEL) ----------------
+    # Fired from "❌ Cancel" on the confirmation prompt above - nothing is
+    # deleted; just redraws the same message in place back to the normal
+    # This Month Watched listing.
+
+    if data == "mwdelall_cancel":
+
+        await edit_month_watched_view(client, callback.message, user_id)
+
+        await callback.answer("Cancelled")
         return
 
     # ---------------- 🗓️ THIS MONTH WATCHED: SEE ACHIEVEMENTS ----------------
