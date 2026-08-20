@@ -73,3 +73,13 @@ async def remove_from_watchlist(user_id, imdb_id):
         {"user_id": user_id, "imdb_id": imdb_id}
     )
     return result.deleted_count > 0
+
+
+# ✅ NEW: powers the "🗑 DELETE THE FULL LIST" confirmation flow on the
+# Watchlist listing (keyboards/watchlist.py + plugins/callback.py) - wipes
+# every saved title for this user in one go.
+async def clear_watchlist(user_id):
+    """Delete ALL watchlist entries for this user.
+    Returns the number of documents removed."""
+    result = await watchlist_collection.delete_many({"user_id": user_id})
+    return result.deleted_count
