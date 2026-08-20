@@ -153,6 +153,22 @@ async def remove_from_month_watched(user_id, key_id, month_key=None):
     return result.deleted_count > 0
 
 
+# ✅ NEW: powers the "🗑 DELETE THE FULL LIST" confirmation flow on the
+# This Month Watched listing (keyboards/month_watched.py +
+# plugins/callback.py) - wipes every entry for this user in one month
+# (current month by default, matching what's actually shown on screen).
+async def clear_month_watched(user_id, month_key=None):
+    """Delete ALL of a user's This Month Watched entries for one month
+    (current month by default). Returns the number of documents removed."""
+    if month_key is None:
+        month_key = current_month_key()
+
+    result = await month_watched_collection.delete_many(
+        {"user_id": user_id, "month_key": month_key}
+    )
+    return result.deleted_count
+
+
 async def is_in_month_watched(user_id, key_id, month_key=None):
     if month_key is None:
         month_key = current_month_key()
