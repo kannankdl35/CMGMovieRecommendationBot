@@ -33,6 +33,28 @@ def watchlist_keyboard(docs):
     if row:
         buttons.append(row)
 
+    # ✅ NEW: "🗑 DELETE THE FULL LIST" - only shown when there's something
+    # to delete. Tapping it does NOT delete anything by itself - it opens
+    # a Yes/Cancel confirmation prompt (see watchlist_confirm_delete_keyboard()
+    # below), handled by the "wldelall_confirm" / "wldelall_yes" /
+    # "wldelall_cancel" callbacks in plugins/callback.py.
+    if docs:
+        buttons.append(
+            [InlineKeyboardButton("🗑 DELETE THE FULL LIST", callback_data="wldelall_confirm")]
+        )
+
     buttons.append([InlineKeyboardButton("🏠 Home", callback_data="back_home")])
 
     return InlineKeyboardMarkup(buttons)
+
+
+# ✅ NEW: Shown after tapping "🗑 DELETE THE FULL LIST" - asks the user to
+# confirm before the whole watchlist is wiped. "✅ Yes" -> "wldelall_yes",
+# "❌ Cancel" -> "wldelall_cancel" (both handled in plugins/callback.py).
+def watchlist_confirm_delete_keyboard():
+    return InlineKeyboardMarkup(
+        [
+            [InlineKeyboardButton("✅ Yes", callback_data="wldelall_yes")],
+            [InlineKeyboardButton("❌ Cancel", callback_data="wldelall_cancel")],
+        ]
+    )
