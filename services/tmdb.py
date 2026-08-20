@@ -1,4 +1,3 @@
-
 import random
 from datetime import date, timedelta
 
@@ -45,6 +44,78 @@ def _clean(value):
     if not value or value == "N/A":
         return None
     return value
+
+
+# ✅ NEW - ISO 639-1 language codes -> full display names. TMDb's
+# "original_language" field on /movie/{id} + /tv/{id} is always a raw
+# two-letter code (e.g. "ml", "ta", "te", "tl"), which used to be shown
+# as-is (just upper-cased) on the details page - see get_details_tmdb()
+# below, "Language" key. This maps it to a readable full name
+# ("Malayalam", "Tamil", "Telugu", "Tagalog") instead.
+# Any code TMDb returns that ISN'T in this map still falls back to the
+# raw code (upper-cased) via _language_name() below, so nothing breaks
+# if TMDb starts returning a code that isn't listed here.
+TMDB_LANGUAGE_NAMES = {
+    "aa": "Afar", "ab": "Abkhazian", "af": "Afrikaans", "ak": "Akan",
+    "sq": "Albanian", "am": "Amharic", "ar": "Arabic", "an": "Aragonese",
+    "hy": "Armenian", "as": "Assamese", "av": "Avaric", "ae": "Avestan",
+    "ay": "Aymara", "az": "Azerbaijani", "bm": "Bambara", "ba": "Bashkir",
+    "eu": "Basque", "be": "Belarusian", "bn": "Bengali", "bh": "Bihari",
+    "bi": "Bislama", "bs": "Bosnian", "br": "Breton", "bg": "Bulgarian",
+    "my": "Burmese", "ca": "Catalan", "ch": "Chamorro", "ce": "Chechen",
+    "ny": "Chichewa", "zh": "Mandarin", "cv": "Chuvash", "kw": "Cornish",
+    "co": "Corsican", "cr": "Cree", "hr": "Croatian", "cs": "Czech",
+    "da": "Danish", "dv": "Divehi", "nl": "Dutch", "dz": "Dzongkha",
+    "en": "English", "eo": "Esperanto", "et": "Estonian", "ee": "Ewe",
+    "fo": "Faroese", "fj": "Fijian", "fi": "Finnish", "fr": "French",
+    "ff": "Fulah", "gl": "Galician", "ka": "Georgian", "de": "German",
+    "el": "Greek", "gn": "Guarani", "gu": "Gujarati", "ht": "Haitian",
+    "ha": "Hausa", "he": "Hebrew", "hz": "Herero", "hi": "Hindi",
+    "ho": "Hiri Motu", "hu": "Hungarian", "ia": "Interlingua", "id": "Indonesian",
+    "ie": "Interlingue", "ga": "Irish", "ig": "Igbo", "ik": "Inupiaq",
+    "io": "Ido", "is": "Icelandic", "it": "Italian", "iu": "Inuktitut",
+    "ja": "Japanese", "jv": "Javanese", "kl": "Kalaallisut", "kn": "Kannada",
+    "kr": "Kanuri", "ks": "Kashmiri", "kk": "Kazakh", "km": "Khmer",
+    "ki": "Kikuyu", "rw": "Kinyarwanda", "ky": "Kyrgyz", "kv": "Komi",
+    "kg": "Kongo", "ko": "Korean", "ku": "Kurdish", "kj": "Kwanyama",
+    "la": "Latin", "lb": "Luxembourgish", "lg": "Ganda", "li": "Limburgish",
+    "ln": "Lingala", "lo": "Lao", "lt": "Lithuanian", "lu": "Luba-Katanga",
+    "lv": "Latvian", "gv": "Manx", "mk": "Macedonian", "mg": "Malagasy",
+    "ms": "Malay", "ml": "Malayalam", "mt": "Maltese", "mi": "Maori",
+    "mr": "Marathi", "mh": "Marshallese", "mn": "Mongolian", "na": "Nauru",
+    "nv": "Navajo", "nd": "North Ndebele", "ne": "Nepali", "ng": "Ndonga",
+    "nb": "Norwegian Bokmål", "nn": "Norwegian Nynorsk", "no": "Norwegian",
+    "ii": "Sichuan Yi", "nr": "South Ndebele", "oc": "Occitan", "oj": "Ojibwe",
+    "cu": "Church Slavic", "om": "Oromo", "or": "Odia", "os": "Ossetian",
+    "pa": "Punjabi", "pi": "Pali", "fa": "Persian", "pl": "Polish",
+    "ps": "Pashto", "pt": "Portuguese", "qu": "Quechua", "rm": "Romansh",
+    "rn": "Rundi", "ro": "Romanian", "ru": "Russian", "sa": "Sanskrit",
+    "sc": "Sardinian", "sd": "Sindhi", "se": "Northern Sami", "sm": "Samoan",
+    "sg": "Sango", "sr": "Serbian", "gd": "Scottish Gaelic", "sn": "Shona",
+    "si": "Sinhala", "sk": "Slovak", "sl": "Slovenian", "so": "Somali",
+    "st": "Southern Sotho", "es": "Spanish", "su": "Sundanese", "sw": "Swahili",
+    "ss": "Swati", "sv": "Swedish", "ta": "Tamil", "te": "Telugu",
+    "tg": "Tajik", "th": "Thai", "ti": "Tigrinya", "bo": "Tibetan",
+    "tk": "Turkmen", "tl": "Tagalog", "tn": "Tswana", "to": "Tongan",
+    "tr": "Turkish", "ts": "Tsonga", "tt": "Tatar", "tw": "Twi",
+    "ty": "Tahitian", "ug": "Uyghur", "uk": "Ukrainian", "ur": "Urdu",
+    "uz": "Uzbek", "ve": "Venda", "vi": "Vietnamese", "vo": "Volapük",
+    "wa": "Walloon", "cy": "Welsh", "wo": "Wolof", "fy": "Western Frisian",
+    "xh": "Xhosa", "yi": "Yiddish", "yo": "Yoruba", "za": "Zhuang",
+    "zu": "Zulu",
+}
+
+
+def _language_name(code):
+    """Turns a TMDb ISO 639-1 "original_language" code (e.g. "ml", "ta")
+    into a full display name (e.g. "Malayalam", "Tamil") for the details
+    page - see get_details_tmdb() below, "Language" key. Falls back to
+    the raw code (upper-cased) if it isn't in TMDB_LANGUAGE_NAMES, so an
+    unrecognised code still shows something instead of breaking.
+    """
+    if not code:
+        return "N/A"
+    return TMDB_LANGUAGE_NAMES.get(code.lower(), code.upper())
 
 
 def _request_multi_search(query):
@@ -247,7 +318,7 @@ def get_details_tmdb(key_id):
         "totalSeasons": str(data.get("number_of_seasons")) if data.get("number_of_seasons") else "N/A",
         "imdbVotes": "N/A",
         "Rated": "N/A",
-        "Language": (data.get("original_language") or "N/A").upper(),
+        "Language": _language_name(data.get("original_language")),
         "Country": country or "N/A",
         "Awards": "N/A",
         "Source": "tmdb",
