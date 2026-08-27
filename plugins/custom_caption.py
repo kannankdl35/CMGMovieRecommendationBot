@@ -67,7 +67,7 @@ def custom_caption_page_text(source, current):
     name = SOURCE_NAMES[source]
 
     current_block = (
-        f"```\n{current}\n```" if current else "❌ **Default** — __no custom caption saved.__"
+        f"```\n{current}\n```" if current else "❌ **--Default--** — __no custom caption saved.__"
     )
 
     tags_line = " ".join(f"#{tag}" for tag in caption_tags_for(source))
@@ -76,9 +76,9 @@ def custom_caption_page_text(source, current):
         f"✏️ **--{name} Custom Caption--**\n\n"
         f"Create your own caption template for every {name} result. Add "
         "your text, tags, and even a channel name or username.\n\n"
-        "**Available Tags**\n"
+        "**--Available Tags--**\n"
         f"{tags_line}\n\n"
-        "**Example**\n"
+        "**--Example--**\n"
         "```\n"
         "🎬 Movie : #TITLE\n"
         "📅 Year : #YEAR\n"
@@ -86,7 +86,7 @@ def custom_caption_page_text(source, current):
         "🎭 Genre : #GENRES\n\n"
         "Join Now : @Channel_Username\n"
         "```\n\n"
-        "🔘 **Current Caption :**\n"
+        "🔘 **--Current Caption :--**\n"
         f"{current_block}\n\n"
         "📌 /show_custom_caption — View saved captions\n"
         "🗑️ /delete_custom_caption — Delete a caption & restore default"
@@ -96,8 +96,8 @@ def custom_caption_page_text(source, current):
 def _format_current(source, template):
     name = SOURCE_NAMES[source]
     if template:
-        return f"**{name}:**\n```\n{template}\n```"
-    return f"**{name}: Default** — __no custom caption saved.__"
+        return f"**--{name}:--**\n```\n{template}\n```"
+    return f"**--{name}: Default--** — __no custom caption saved.__"
 
 
 @Client.on_message(filters.command("show_custom_caption"))
@@ -222,3 +222,4 @@ async def receive_custom_caption(client, message):
         "📌 /show_custom_caption — view it anytime\n"
         "🗑 /delete_custom_caption — remove it, back to default"
     )
+
