@@ -11,11 +11,6 @@
 
 BOT_NAME = "CMG Movie Info Bot"
 
-DESCRIPTION = (
-    "Search any Movie or TV Series and get full details - poster, rating, "
-    "cast, plot, and more - powered by IMDb and TMDb."
-)
-
 VERSION = "1.0.0"
 
 # Shown as plain text - update this string by hand whenever you ship a
@@ -34,13 +29,15 @@ DATABASE = "MongoDB"
 # Shown as "MongoDB", linked to MongoDB's official site.
 DATABASE_URL = "https://www.mongodb.com/"
 
-# Developer/Admin - shown as "Deepak (t.me/CMG_4dmin)" with
-# "t.me/CMG_4dmin" linked to https://t.me/<DEVELOPER_USERNAME>.
+# Developer/Admin - shown as "Deepak", linked to
+# https://t.me/<DEVELOPER_USERNAME> (same link-styling as Database/
+# Hosting/Source above - the name itself is the clickable link).
 DEVELOPER_NAME = "Deepak"
 DEVELOPER_USERNAME = "CMG_4dmin"
 
-# Channel - shown as "Cinemagram (t.me/cinemagram_links)" with
-# "t.me/cinemagram_links" linked to https://t.me/<CHANNEL_USERNAME>.
+# Channel - shown as "Cinemagram", linked to
+# https://t.me/<CHANNEL_USERNAME> (same link-styling as Database/
+# Hosting/Source above - the name itself is the clickable link).
 CHANNEL_NAME = "Cinemagram"
 CHANNEL_USERNAME = "cinemagram_links"
 
@@ -62,23 +59,22 @@ def build_about_text():
     "about_open" handler, entirely from the values above.
     """
 
-    developer_link = f"[t.me/{DEVELOPER_USERNAME}](https://t.me/{DEVELOPER_USERNAME})"
-    channel_link = f"[t.me/{CHANNEL_USERNAME}](https://t.me/{CHANNEL_USERNAME})"
+    developer_link = f"[{DEVELOPER_NAME}](https://t.me/{DEVELOPER_USERNAME})"
+    channel_link = f"[{CHANNEL_NAME}](https://t.me/{CHANNEL_USERNAME})"
     database_link = f"[{DATABASE}]({DATABASE_URL})"
     hosting_link = f"[{HOSTING_NAME}]({HOSTING_URL})"
     source_link = f"[Click Here]({SOURCE_URL})"
 
     return (
         f"ℹ️ **--{BOT_NAME}--**\n\n"
-        f"{DESCRIPTION}\n\n"
         f"🏷 **Version:** {VERSION}\n"
         f"🗓 **Last Update:** {LAST_UPDATE}\n"
         f"🐍 **Built with:** {PROGRAMMING_LANGUAGE} · {FRAMEWORK}\n"
         f"🗄 **Database:** {database_link}\n"
         f"☁️ **Hosting:** {hosting_link}\n"
         f"💻 **Source:** {source_link}\n\n"
-        f"👤 **Developer:** {DEVELOPER_NAME} ({developer_link})\n"
-        f"📣 **Channel:** {CHANNEL_NAME} ({channel_link})"
+        f"👤 **Developer:** {developer_link}\n"
+        f"📣 **Channel:** {channel_link}"
     )
 
 
