@@ -1,4 +1,4 @@
-## Location: plugins/month_watched.py  (NEW FILE)
+### Location: plugins/month_watched.py  (NEW FILE)
 
 from pyrogram import Client, filters
 
@@ -42,7 +42,7 @@ def build_month_watched_text(docs, month_key=None):
     current_month_key()), this label updates automatically every calendar
     month with no hardcoding needed."""
     month_label = month_key_to_label(month_key) if month_key else ""
-    header = f"📅 **This Month Watched — {month_label}**" if month_label else "📅 **This Month Watched**"
+    header = f"📅 **--This Month Watched — {month_label}--**" if month_label else "📅 **--This Month Watched--**"
 
     if not docs:
         return (
@@ -62,7 +62,7 @@ def build_month_watched_text(docs, month_key=None):
 
         lines.append(f"{index}. {icon} {title} ({year})")
 
-    lines.append("\n👇 Tap a number for full details")
+    lines.append("\n__Click a number button below to explore the movie in full detail. ⬇️__")
 
     return "\n".join(lines)
 
@@ -79,7 +79,7 @@ def build_monthly_status_text(stats):
     (services/monthly_report.py) correctly shows the name of the month
     that just ended rather than the current one."""
     month_label = month_key_to_label(stats.get("month_key"))
-    header = f"📊 **Monthly Status — {month_label}**" if month_label else "📊 **Monthly Status**"
+    header = f"📊 **--Monthly Status — {month_label}--**" if month_label else "📊 **--Monthly Status--**"
     lines = [f"{header}\n"]
 
     lines.append(f"🎬 **Movies:** {stats['movie_count']}")
@@ -94,7 +94,7 @@ def build_monthly_status_text(stats):
 
     unlocked = [a for a in stats["achievements"] if a["unlocked"]]
 
-    lines.append("\n✅ **Unlocked**")
+    lines.append("\n✅ **--Unlocked--**")
     if unlocked:
         for achievement in unlocked:
             lines.append(f"{achievement['icon']} {achievement['name']}")
@@ -113,7 +113,7 @@ def build_achievements_text(stats):
         criteria = achievement["criteria"]
         if not criteria.endswith(("+", ".")):
             criteria += "."
-        lines.append(f"{achievement['icon']} **{achievement['name']}** — __{criteria}__")
+        lines.append(f"{achievement['icon']} **--{achievement['name']}--** — __{criteria}__")
         lines.append(f"Progress: {achievement['progress_text']}\n")
 
     return "\n".join(lines).strip()
@@ -190,3 +190,4 @@ async def month_watched_command(client, message):
     user_id = message.from_user.id
 
     await send_month_watched_view(client, message.chat.id, user_id)
+
