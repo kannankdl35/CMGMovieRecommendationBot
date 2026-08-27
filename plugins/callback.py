@@ -141,8 +141,8 @@ from about.about_info import build_about_text, build_help_text
 SETTINGS_MENU_TEXT = (
     "⚙️ **--Settings--**\n\n"
     "__Customize how your movie results look.__ 🛠️\n\n"
-    "🎬 **--TMDb Settings--** — __Customize TMDb results.__\n\n"
-    "🎥 **--IMDb Settings--** — __Customize IMDb results.__\n\n"
+    "🎬 **TMDb Settings** — __Customize TMDb results.__\n\n"
+    "🎥 **IMDb Settings** — __Customize IMDb results.__\n\n"
     "Choose a source below ⬇️."
 )
 
@@ -163,16 +163,16 @@ TMDB_SETTINGS_TEXT = (
 TRENDING_MENU_TEXT = (
     "🔥 **--Trending Now--**\n\n"
     "__Stay up to date with the hottest movies and shows.__ ✨\n\n"
-    "📅 **--Today--** — __Trending right now.__\n\n"
-    "📈 **--This Week--** — __The week's top picks.__\n\n"
+    "📅 **Today** — __Trending right now.__\n\n"
+    "📈 **This Week** — __The week's top picks.__\n\n"
     "Choose one to get started ⬇️."
 )
 
 UPCOMING_CATEGORY_TEXT = (
     "🎬 **--Upcoming Movies--**\n\n"
     "__Discover the movies and shows arriving soon.__ 🍿\n\n"
-    "🎬 **--Theatre Releases--** — __Coming soon to the cinemas.__\n\n"
-    "📺 **--OTT Releases--** — __Recent or upcoming streamings.__\n\n"
+    "🎬 **Theatre Releases** — __Coming soon to the cinemas.__\n\n"
+    "📺 **OTT Releases** — __Recent or upcoming streamings.__\n\n"
     "Choose an option below ⬇️."
 )
 
