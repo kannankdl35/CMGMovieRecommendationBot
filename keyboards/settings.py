@@ -35,16 +35,16 @@ def settings_menu_keyboard():
     """Shown right after tapping "⚙️ Settings" on the main menu.
 
     Two options:
-      - 🎥 IMDb Settings -> per-field toggles for SEARCH - IMDb details
       - 📽 TMDb Settings -> per-field toggles for SEARCH - TMDb details
+      - 🎥 IMDb Settings -> per-field toggles for SEARCH - IMDb details
       - ⬅ Back           -> back to the bot's main menu (callback_data
                             "back_home", already handled in
                             plugins/callback.py)
     """
     return InlineKeyboardMarkup(
         [
-            [InlineKeyboardButton("🎥 IMDb Settings", callback_data="settings_imdb_open")],
             [InlineKeyboardButton("📽 TMDb Settings", callback_data="settings_tmdb_open")],
+            [InlineKeyboardButton("🎥 IMDb Settings", callback_data="settings_imdb_open")],
             [InlineKeyboardButton("⬅ Back", callback_data="back_home")],
         ]
     )
@@ -106,3 +106,4 @@ def imdb_settings_keyboard(field_order, current_settings):
 
 def tmdb_settings_keyboard(field_order, current_settings):
     return _source_settings_keyboard("tmdb", field_order, current_settings)
+
