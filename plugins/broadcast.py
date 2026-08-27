@@ -57,7 +57,7 @@ def _format_elapsed(seconds: float) -> str:
 
 
 def _status_text(total, completed, success, blocked, deleted, *, done=False, elapsed=None):
-    header = "✅ **Broadcast Complete**" if done else "📢 **Broadcasting…**"
+    header = "✅ **--Broadcast Complete--**" if done else "📢 **--Broadcasting…--**"
     lines = [header]
 
     if done and elapsed is not None:
@@ -197,3 +197,4 @@ async def broadcast_command(client, message):
         await status_message.edit_text(final_text, disable_web_page_preview=True)
     except Exception:
         await message.reply_text(final_text)
+
