@@ -1,4 +1,4 @@
-# Location: services/monthly_report.py  (NEW FILE)
+## Location: services/monthly_report.py  (NEW FILE)
 
 import asyncio
 
@@ -56,7 +56,7 @@ async def send_final_report_for_month(client, month_key):
     for user_id in user_ids:
         try:
             stats = await compute_monthly_stats(user_id, month_key=month_key)
-            text = "🎉 **Your Monthly Wrap-Up**\n\n" + build_monthly_status_text(stats)
+            text = "🎉 **--Your Monthly Wrap-Up--**\n\n" + build_monthly_status_text(stats)
             await client.send_message(chat_id=user_id, text=text)
         except Exception:
             # A user may have blocked the bot, deleted their Telegram
@@ -96,3 +96,4 @@ async def monthly_watched_scheduler(client):
         except Exception:
             # Never let a scheduler hiccup take down the whole bot process.
             continue
+
