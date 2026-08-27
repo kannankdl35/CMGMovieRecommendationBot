@@ -1,4 +1,4 @@
-# Location: plugins/month_watched.py  (NEW FILE)
+## Location: plugins/month_watched.py  (NEW FILE)
 
 from pyrogram import Client, filters
 
@@ -107,10 +107,13 @@ def build_monthly_status_text(stats):
 def build_achievements_text(stats):
     """Build the full "🏆 See the Achievements" page (Feature 4) - every
     achievement with its criteria and this user's current progress."""
-    lines = ["🏆 **Achievements**\n"]
+    lines = ["🏆 **--Achievements--**\n"]
 
     for achievement in stats["achievements"]:
-        lines.append(f"{achievement['icon']} **{achievement['name']}** — {achievement['criteria']}")
+        criteria = achievement["criteria"]
+        if not criteria.endswith(("+", ".")):
+            criteria += "."
+        lines.append(f"{achievement['icon']} **{achievement['name']}** — __{criteria}__")
         lines.append(f"Progress: {achievement['progress_text']}\n")
 
     return "\n".join(lines).strip()
