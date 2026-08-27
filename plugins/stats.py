@@ -1,4 +1,4 @@
-# Location: plugins/stats.py  (NEW FILE)
+## Location: plugins/stats.py  (NEW FILE)
 
 from pyrogram import Client, filters
 
@@ -40,7 +40,7 @@ async def stats_command(client, message):
         return
 
     text = (
-        "📊 **Bot Stats**\n\n"
+        "📊 **--Bot Stats--**\n\n"
         f"👥 **Total Users:** {total_users}\n"
         f"🆕 **New Today:** {new_users_today}\n"
         f"🔍 **Total Searches:** {total_searches}\n"
@@ -49,3 +49,4 @@ async def stats_command(client, message):
     )
 
     await message.reply_text(text)
+
