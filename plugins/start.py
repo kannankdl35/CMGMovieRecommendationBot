@@ -2,7 +2,7 @@
 
 from pyrogram import Client, filters
 
-from keyboards.home import home_keyboard
+from keyboards.home import home_keyboard, build_home_text
 from database.users_db import register_user
 from services.logger import send_new_user_log
 
@@ -29,19 +29,7 @@ async def start_command(client, message):
             print(f"Type: {type(e).__name__}")
             print(f"Message: {e}")
 
-    text = (
-        "👋 **Welcome to CMG Movie Recommendation Bot!**\n\n"
-        "Discover movies & shows — posters, ratings, cast & plot, "
-        "all in one tap.\n\n"
-        "🔍 **Search** — IMDb or TMDb\n"
-        "🔥 **Trending** — today & this week\n"
-        "🎬 **Upcoming** — theatre & OTT releases\n"
-        "🎲 **Random Pick** — a surprise, always 7★+\n"
-        "📋 **Watchlist** — save what to watch\n"
-        "📅 **This Month** — track & unlock achievements\n"
-        "⚙️ **Settings** — customize your details\n\n"
-        "👇 Tap a button below to begin"
-    )
+    text = build_home_text(user.first_name if user else None)
 
     buttons = home_keyboard()
 
