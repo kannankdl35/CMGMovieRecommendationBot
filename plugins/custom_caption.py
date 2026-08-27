@@ -1,4 +1,4 @@
-# Location: plugins/custom_caption.py  (NEW FILE)
+# # Location: plugins/custom_caption.py  (NEW FILE)
 
 from pyrogram import Client, filters, ContinuePropagation
 
@@ -73,7 +73,7 @@ def custom_caption_page_text(source, current):
     tags_line = " ".join(f"#{tag}" for tag in caption_tags_for(source))
 
     return (
-        f"✏️ **--{name} Custom Caption--**\n\n"
+        f"📝 **--{name} Custom Caption--**\n\n"
         f"Create your own caption template for every {name} result. Add "
         "your text, tags, and even a channel name or username.\n\n"
         "**--Available Tags--**\n"
@@ -88,8 +88,9 @@ def custom_caption_page_text(source, current):
         "```\n\n"
         "🔘 **--Current Caption :--**\n"
         f"{current_block}\n\n"
-        "📌 /show_custom_caption — View saved captions\n"
-        "🗑️ /delete_custom_caption — Delete a caption & restore default"
+        "📌 /show_custom_caption — View saved captions\n\n"
+        "🗑️ /delete_custom_caption — Delete a caption & restore default\n\n"
+        f"**--__Please sent your {name} Custom Caption Here.__--** ⬇️"
     )
 
 
@@ -222,4 +223,3 @@ async def receive_custom_caption(client, message):
         "📌 /show_custom_caption — view it anytime\n"
         "🗑 /delete_custom_caption — remove it, back to default"
     )
-
