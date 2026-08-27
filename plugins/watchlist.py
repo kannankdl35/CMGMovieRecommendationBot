@@ -31,12 +31,12 @@ def build_watchlist_text(docs):
     limited/ordered) list of watchlist documents."""
     if not docs:
         return (
-            "📭 **Your Watchlist is empty**\n\n"
+            "📭 **--Your Watchlist is empty--**\n\n"
             "Search a title with 🔍 **Search**, then tap ❤️ **Add to "
             "Watchlist** on its details page to save it here."
         )
 
-    lines = ["📋 **Your Watchlist**\n"]
+    lines = ["📋 **--Your Watchlist--**\n"]
 
     for index, doc in enumerate(docs, start=1):
         title = doc.get("title") or "Unknown"
@@ -46,7 +46,7 @@ def build_watchlist_text(docs):
 
         lines.append(f"{index}. {icon} {title} ({year})")
 
-    lines.append("\n👇 Tap a number for full details")
+    lines.append("\n__Click a number button below to explore the movie in full detail. ⬇️__")
 
     return "\n".join(lines)
 
@@ -129,3 +129,4 @@ async def watchlist_command(client, message):
     user_id = message.from_user.id
 
     await send_watchlist_view(client, message.chat.id, user_id)
+
