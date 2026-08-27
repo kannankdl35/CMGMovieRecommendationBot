@@ -3,6 +3,21 @@
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 
+def build_home_text(first_name=None):
+    """Text shown on the Home/Welcome menu - shared by plugins/start.py's
+    /start command and plugins/callback.py's "back_home" /
+    "home_from_search" callbacks, so the wording only has to change in
+    one place. `first_name` is the Telegram user's first name (falls
+    back to "there" if unavailable)."""
+    name = first_name or "there"
+    return (
+        f"👋 Hey {name},\n\n"
+        "__Discover movies, shows, ratings, trending titles, and more — "
+        "all in one place.__ 🎬\n\n"
+        "Choose an option below to begin ⬇️."
+    )
+
+
 def home_keyboard():
     """The Home menu buttons, top to bottom:
 
