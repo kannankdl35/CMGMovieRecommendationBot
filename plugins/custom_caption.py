@@ -59,10 +59,6 @@ print("✅ CUSTOM CAPTION PLUGIN LOADED")
 SOURCE_NAMES = {"imdb": "IMDb", "tmdb": "TMDb"}
 
 
-def _tags_line(source):
-    return " ".join(f"`#{tag}`" for tag in caption_tags_for(source))
-
-
 def custom_caption_page_text(source, current):
     """Text for the "✏️ Custom Caption" page itself (opened from IMDb/
     TMDb Settings) - the tags this source supports, an example, and
@@ -71,27 +67,29 @@ def custom_caption_page_text(source, current):
     name = SOURCE_NAMES[source]
 
     current_block = (
-        f"```\n{current}\n```" if current else "_Default — nothing saved yet_"
+        f"```\n{current}\n```" if current else "❌ **Default** — __no custom caption saved.__"
     )
 
+    tags_line = " ".join(f"#{tag}" for tag in caption_tags_for(source))
+
     return (
-        f"✏️ **{name} Custom Caption**\n\n"
-        f"Send your own {name} caption template and it'll replace the "
-        f"default layout for every {name} result.\n\n"
-        "Use any tag below — each fills in automatically. Add your own "
-        "text around them too, like a channel name or username.\n\n"
-        f"**Available tags:**\n{_tags_line(source)}\n\n"
-        "**Example:**\n"
+        f"✏️ **--{name} Custom Caption--**\n\n"
+        f"Create your own caption template for every {name} result. Add "
+        "your text, tags, and even a channel name or username.\n\n"
+        "**Available Tags**\n"
+        f"{tags_line}\n\n"
+        "**Example**\n"
         "```\n"
-        "<b> 🎬 Movie : #TITLE </b>\n"
+        "🎬 Movie : #TITLE\n"
         "📅 Year : #YEAR\n"
-        "⭐ Rating : #RATING\n"
+        "⭐ Rating: #RATING\n"
         "🎭 Genre : #GENRES\n\n"
         "Join Now : @Channel_Username\n"
         "```\n\n"
-        f"**Current {name} caption:**\n{current_block}\n\n"
-        "📌 /show_custom_caption — view your saved caption(s)\n"
-        "🗑 /delete_custom_caption — remove one, back to default"
+        "🔘 **Current Caption :**\n"
+        f"{current_block}\n\n"
+        "📌 /show_custom_caption — View saved captions\n"
+        "🗑️ /delete_custom_caption — Delete a caption & restore default"
     )
 
 
@@ -99,7 +97,7 @@ def _format_current(source, template):
     name = SOURCE_NAMES[source]
     if template:
         return f"**{name}:**\n```\n{template}\n```"
-    return f"**{name}:** _Default — nothing saved_"
+    return f"**{name}: Default** — __no custom caption saved.__"
 
 
 @Client.on_message(filters.command("show_custom_caption"))
@@ -115,7 +113,7 @@ async def show_custom_caption_command(client, message):
     tmdb_caption = await get_custom_caption(user_id, "tmdb")
 
     text = (
-        "✏️ **Your Custom Captions**\n\n"
+        "✏️ **--Your Custom Captions--**\n\n"
         f"{_format_current('imdb', imdb_caption)}\n\n"
         f"{_format_current('tmdb', tmdb_caption)}\n\n"
         "Open ⚙️ Settings → 🎥 IMDb / 📽 TMDb → ✏️ Custom Caption to change "
